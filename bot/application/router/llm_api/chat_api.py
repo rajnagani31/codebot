@@ -36,7 +36,8 @@ def build_prompt(request: ChatRequest):
 async def chat(request: ChatRequest, code = Query(str)):
     try:
         graph = OpenAIToolGraph()
-        content = request.query + f"```{code}```"
+        # code = f"```{code}```"
+        content = request.query # + code
 
     except Exception as e:
         # Error before streaming starts
