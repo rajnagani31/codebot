@@ -15,4 +15,5 @@ dependencies = [
     "langsmith>=0.7.16",
     "python-dotenv>=1.2.2",
     "textual>=8.1.1",
+    "uvicorn>=0.42.0",
 ]

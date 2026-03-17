@@ -1,24 +1,15 @@
 # openai_tool/openai_tool_graph.py
 
-import os
-import sys
-_here = os.path.dirname(__file__)
-_pkg_root = os.path.abspath(os.path.join(_here, '..'))
-if _pkg_root not in sys.path:
-    sys.path.insert(0, _pkg_root)
-
 from typing import Annotated, TypedDict, Literal, Optional
 import asyncio
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from langchain_core.messages import HumanMessage, ToolMessage, AIMessage, BaseMessage
-from openai_tools import *  # Your @tool functions
-from openai_adapter.openai_llm_service import OpenAILLMService
+from bot.workflow.openai_flow.system.system_helper import GetSytemInstruction
 
-_here = os.path.dirname(__file__)
-_pkg_root = os.path.abspath(os.path.join(_here, '..'))
-if _pkg_root not in sys.path:
-    sys.path.insert(0, _pkg_root)
+# Use relative imports for modules in the same openai_tool package
+from .openai_tools import *  # Your @tool functions
+from bot.workflow.openai_flow.openai_adapter.openai_llm_service import OpenAILLMService
 
 
 class State(TypedDict):
@@ -71,7 +62,7 @@ class OpenAIToolGraph:
         # STREAM the LLM response
         response = await self.stream_llm(messages)
 
-        print("\nLLM final message:", response)
+        # print("\nLLM final message:", response)
 
         return {"messages": [response]}
 
@@ -115,14 +106,13 @@ class OpenAIToolGraph:
         """Stream tokens while preserving tool calls"""
 
         accumulated = None
-
-        async for chunk in self.llm._chat_model.astream(messages):
+        full_message = GetSytemInstruction().build_messages(messages=messages)
+        async for chunk in self.llm._chat_model.astream(full_message):
 
             # print visible tokens
             if chunk.content:
-                sys.stdout.write(chunk.content)
+                # sys.stdout.write(chunk.content)
                 sys.stdout.flush()
-
             # merge chunks properly
             if accumulated is None:
                 accumulated = chunk
@@ -133,32 +123,32 @@ class OpenAIToolGraph:
 
         return accumulated
 
-    async def run_streaming(self):
+    async def run_streaming(self, query):
         """Interactive loop using LangGraph streaming"""
 
-        while True:
-            user_input = await asyncio.to_thread(input, "You: ")
+        # while True:
+        #     user_input = await asyncio.to_thread(input, "You: ")
 
-            if user_input.lower() in ["exit", "quit"]:
-                print("Exiting...")
-                break
+        # if query.lower() in ["exit", "quit"]:
+        #     print("Exiting...")
+        #     break
 
-            inputs = {"messages": [HumanMessage(content=user_input)]}
+        inputs = {"messages": [HumanMessage(content=query)]}
 
-            async for event in self.app.astream(inputs):
+        async for event in self.app.astream(inputs):
 
-                for node, output in event.items():
+            for node, output in event.items():
 
-                    # Agent response node
-                    if node == "agent_response":
-                        msg = output["messages"][-1]
+                # Agent response node
+                if node == "agent_response":
+                    msg = output["messages"][-1]
 
-                        if isinstance(msg, AIMessage) and msg.content:
-                            print(msg.content)
+                    if isinstance(msg, AIMessage) and msg.content:
+                        print('ok',msg.content)
 
-                    # Tool execution node
-                    if node == "tools":
-                        print("⚙️ Tool executed")
+                # Tool execution node
+                if node == "tools":
+                    print("⚙️ Tool executed")
 
 
 if __name__ == "__main__":
