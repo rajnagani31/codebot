@@ -1,2 +1,1 @@
-# neroCLI
-Custome CLI for develop own codebase
+# Code generator bot
