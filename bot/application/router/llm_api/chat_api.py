@@ -1,71 +1,77 @@
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-import importlib
-import os
-import sys
-from pathlib import Path
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from langchain_core.messages import HumanMessage, AIMessage
+from bot.workflow.openai_flow.system.system_helper import GetSytemInstruction
 from bot.workflow.openai_flow.openai_tool.openai_tool_graph import OpenAIToolGraph
+from bot.workflow.qudrant.vector_service import VectorService
 
 router = APIRouter()
 
 class ChatRequest(BaseModel):
     query: str
+    user_id : int
     code: str | None = None
     mode: str = "chat"  # chat | code | debug | review
 	 
 
-def build_prompt(request: ChatRequest):
-    content = request.query
+# def build_prompt(request: ChatRequest):
+#     content = request.query
 
-    if request.code:
-        content += f"\n\nHere is the code:\n```python\n{request.code}\n```"
+#     if request.code:
+#         content += f"\n\nHere is the code:\n```python\n{request.code}\n```"
 
-    if request.mode == "debug":
-        content = f"Debug this:\n{content}"
-    elif request.mode == "review":
-        content = f"Review this code:\n{content}"
-    elif request.mode == "code":
-        content = f"Write code for:\n{content}"
+#     if request.mode == "debug":
+#         content = f"Debug this:\n{content}"
+#     elif request.mode == "review":
+#         content = f"Review this code:\n{content}"
+#     elif request.mode == "code":
+#         content = f"Write code for:\n{content}"
 
-    return content
+#     return content
 
 
 @router.post("/chat")
 async def chat(request: ChatRequest, code = Query(str)):
     try:
         graph = OpenAIToolGraph()
-        # code = f"```{code}```"
-        content = request.query # + code
+        vector_service = VectorService()
 
+        user_id = request.user_id
+        user_query = request.query
+        history = vector_service.search(user_id=user_id, query = user_query)
+
+        user_history = "\n".join(history)
+        print("user_history",user_history)
+        # full_message = GetSytemInstruction().build_messages(messages = user_query, previous_context = user_history)
+        messages = [
+            HumanMessage(content=user_query)
+        ]
     except Exception as e:
         # Error before streaming starts
         raise HTTPException(status_code=500, detail=f"Setup error: {str(e)}")
 
     async def event_stream():
+        full_response = ""
         try:
-            inputs = {"messages": [HumanMessage(content=content)]}
+            llm_response = await graph.stream_llm(
+                messages=messages,
+                previous_context=user_history   # 🔥 THIS IS THE KEY
+            )
 
-            async for event in graph.app.astream(inputs):
-                print(event)
-                try:
-                    for node, output in event.items():
+            if llm_response and llm_response.content:
+                full_response += llm_response.content
+                yield llm_response.content
 
-                        if node == "agent_response":
-                            msg = output["messages"][-1]
-                            if isinstance(msg, AIMessage) and msg.content:
-                                yield msg.content
-
-                        elif node == "tools":
-                            yield "\n[tool-executed]\n"
-
-                except Exception as inner_error:
-                    # Error while processing one event
-                    yield f"\n[error-processing-event]: {str(inner_error)}\n"
 
         except Exception as stream_error:
             # Error during streaming
             yield f"\n[stream-error]: {str(stream_error)}\n"
+
+        try:
+            vector_service.store(user_id=user_id, text=user_query, type_="query")
+            vector_service.store(user_id=user_id, text=full_response, type_="response")
+        except Exception as store_error:
+            print("Vector store error :",store_error)
 
     return StreamingResponse(event_stream(), media_type="text/plain")
