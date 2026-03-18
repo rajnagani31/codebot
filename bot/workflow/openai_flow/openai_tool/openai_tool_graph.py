@@ -2,9 +2,11 @@
 
 from typing import Annotated, TypedDict, Literal, Optional
 import asyncio
+import sys
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from langchain_core.messages import HumanMessage, ToolMessage, AIMessage, BaseMessage
+from bot.workflow.qudrant.vector_service import VectorService
 from bot.workflow.openai_flow.system.system_helper import GetSytemInstruction
 
 # Use relative imports for modules in the same openai_tool package
@@ -102,24 +104,27 @@ class OpenAIToolGraph:
             return "tools"
         return END
 
-    async def stream_llm(self, messages: list) -> AIMessage:
+    async def stream_llm(self, messages: list, previous_context: str = "") -> AIMessage:
         """Stream tokens while preserving tool calls"""
 
         accumulated = None
-        full_message = GetSytemInstruction().build_messages(messages=messages)
+        print('previous_context',previous_context)
+        
+        # ✅ Inject context into system prompt
+        full_message = GetSytemInstruction().build_messages(
+            messages=messages,
+            previous_context=previous_context
+        )
+
         async for chunk in self.llm._chat_model.astream(full_message):
 
-            # print visible tokens
             if chunk.content:
-                # sys.stdout.write(chunk.content)
                 sys.stdout.flush()
-            # merge chunks properly
+
             if accumulated is None:
                 accumulated = chunk
             else:
                 accumulated = accumulated + chunk
-
-        print()
 
         return accumulated
 
