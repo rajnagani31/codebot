@@ -54,23 +54,32 @@ async def chat(request: ChatRequest, code = Query(str)):
     async def event_stream():
         full_response = ""
         try:
-            llm_response = await graph.stream_llm(
-                messages=messages,
-                previous_context=user_history   # 🔥 THIS IS THE KEY
-            )
+            async for event in graph.app.astream(
+                {
+                    "messages": messages,
+                    "previous_context": user_history  # inject here
+                }
+            ):
+                for node, output in event.items():
+                    if node == "agent_response":
+                        msg = output["messages"][-1]
 
-            if llm_response and llm_response.content:
-                full_response += llm_response.content
-                yield llm_response.content
-
+                        if msg.content:
+                            full_response += msg.content
+                            yield msg.content
 
         except Exception as stream_error:
             # Error during streaming
             yield f"\n[stream-error]: {str(stream_error)}\n"
 
         try:
-            vector_service.store(user_id=user_id, text=user_query, type_="query")
-            vector_service.store(user_id=user_id, text=full_response, type_="response")
+            chat_text = f"User: {user_query}\nAI: {full_response}"
+
+            vector_service.store(
+                user_id=user_id,
+                text=chat_text,
+                type_="chat"
+            )
         except Exception as store_error:
             print("Vector store error :",store_error)
 
