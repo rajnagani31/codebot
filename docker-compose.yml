@@ -12,7 +12,7 @@ services:
       QDRANT_HOST: vector_db
       QDRANT_PORT: "6333"
       QDRANT_URL: http://vector_db:6333
-    depends_on:aara
+    depends_on:
       - valkey
       - vector_db
     ports:

@@ -5,25 +5,26 @@ def main():
     service = VectorService()
     user_id = 1
 
-    dummy_texts = [
-        ("My name is Raj and I work on the Codebot project.", "profile"),
-        ("I like FastAPI, LangChain, and Qdrant for AI apps.", "preferences"),
-        ("My favorite database for vectors is Qdrant.", "preferences"),
+    print("📦 Storing dummy records...")
+
+    dummy_data = [
+        "User: My name is Raj\nAI: Nice to meet you Raj!",
+        "User: I like Django\nAI: Django is a powerful web framework.",
+        "User: How to create Django project?\nAI: Use django-admin startproject project_name",
     ]
 
-    print("Storing dummy records...")
-    for text, type_ in dummy_texts:
-        service.store(user_id=user_id, text=text, type_=type_)
-        print(f"Stored: {text}")
+    for text in dummy_data:
+        service.store(user_id=user_id, text=text, type_="chat")
+        print("Stored:", text[:50])
 
-    query = "my name is raj"
-    print(f"\nSearching for: {query}")
+    query = "how to create a django project?"
+    print(f"\n🔍 Searching for: {query}")
 
     results = service.search(user_id=user_id, query=query, k=3)
 
-    print("\nTop matches:")
-    for index, result in enumerate(results, start=1):
-        print(f"{index}. {result}")
+    print("\n✅ Results:")
+    for i, r in enumerate(results, 1):
+        print(f"{i}. {r}")
 
 
 if __name__ == "__main__":

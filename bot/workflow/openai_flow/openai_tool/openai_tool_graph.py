@@ -16,7 +16,7 @@ from bot.workflow.openai_flow.openai_adapter.openai_llm_service import OpenAILLM
 
 class State(TypedDict):
     messages: Annotated[list, add_messages]
-
+    previous_context: str
 
 class OpenAIToolGraph:
     """Encapsulates the tool-enabled LLM graph and provides streaming runs."""
@@ -55,6 +55,7 @@ class OpenAIToolGraph:
         print("🧠 Agent streaming response...")
 
         messages = state["messages"]
+        previous_context = state.get("previous_context", "")
 
         # greeting shortcut
         if messages[-1].content.lower() in ["hi", "hello", "hi, thier"]:
@@ -62,11 +63,11 @@ class OpenAIToolGraph:
             return {"messages": [AIMessage(content="Hello! How can I assist you today?!!")]}
 
         # STREAM the LLM response
-        response = await self.stream_llm(messages)
+        response = await self.stream_llm(messages, previous_context)
 
         # print("\nLLM final message:", response)
 
-        return {"messages": [response]}
+        return {"messages": state["messages"] + [response]}
 
     def execute_tools(self, state: State):
         """Execute the tool calls from agent"""
@@ -95,7 +96,7 @@ class OpenAIToolGraph:
                     print(f"✅ Tool executed: {tool_name}({tool_args}) -> {result}")
                     break
 
-        return {"messages": tool_messages}
+        return {"messages": state["messages"] + tool_messages}
 
     def should_continue(self, state: State) -> Literal["tools", END]:  # type: ignore
         last_message = state["messages"][-1]
