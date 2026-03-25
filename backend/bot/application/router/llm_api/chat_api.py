@@ -2,8 +2,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage, AIMessage
-from bot.workflow.pg_vector.pg_vector_service import PGVectorService
-from bot.workflow.openai_flow.system.system_helper import GetSytemInstruction
+from backend.bot.workflow.pg_vector.pg_vector_service import PGVectorService
 from bot.workflow.openai_flow.openai_tool.openai_tool_graph import OpenAIToolGraph
 from bot.workflow.qudrant.vector_service import VectorService
 
