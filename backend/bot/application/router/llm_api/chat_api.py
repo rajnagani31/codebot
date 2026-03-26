@@ -1,10 +1,9 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from langchain_core.messages import HumanMessage, AIMessage
-from bot.workflow.openai_flow.system.system_helper import GetSytemInstruction
+from langchain_core.messages import HumanMessage
+from backend.bot.workflow.pg_vector.pg_vector_service import PGVectorService
 from bot.workflow.openai_flow.openai_tool.openai_tool_graph import OpenAIToolGraph
-from bot.workflow.qudrant.vector_service import VectorService
 
 router = APIRouter()
 
@@ -32,14 +31,14 @@ class ChatRequest(BaseModel):
 
 
 @router.post("/chat")
-async def chat(request: ChatRequest, code = Query(str)):
+async def chat(request: ChatRequest):
     try:
         graph = OpenAIToolGraph()
-        vector_service = VectorService()
-
+        # vector_service = VectorService()
+        pg_vector_service = PGVectorService()
         user_id = request.user_id
         user_query = request.query
-        history = vector_service.search(user_id=user_id, query = user_query)
+        history = pg_vector_service.search(user_id=user_id, query = user_query)
 
         user_history = "\n".join(history)
         print("user_history",user_history)
@@ -54,19 +53,21 @@ async def chat(request: ChatRequest, code = Query(str)):
     async def event_stream():
         full_response = ""
         try:
-            async for event in graph.app.astream(
+            async for chunk, _metadata in graph.app.astream(
                 {
                     "messages": messages,
-                    "previous_context": user_history  # inject here
-                }
+                    "previous_context": user_history,
+                },
+                stream_mode="messages",
             ):
-                for node, output in event.items():
-                    if node == "agent_response":
-                        msg = output["messages"][-1]
+                content = getattr(chunk, "content", "")
 
-                        if msg.content:
-                            full_response += msg.content
-                            yield msg.content
+                if not content:
+                    continue
+
+                if isinstance(content, str):
+                    full_response += content
+                    yield content
 
         except Exception as stream_error:
             # Error during streaming
@@ -75,7 +76,7 @@ async def chat(request: ChatRequest, code = Query(str)):
         try:
             chat_text = f"User: {user_query}\nAI: {full_response}"
 
-            vector_service.store(
+            pg_vector_service.store(
                 user_id=user_id,
                 text=chat_text,
                 type_="chat"

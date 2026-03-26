@@ -5,6 +5,7 @@ description = "Nero CLI"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "dotenv>=0.9.9",
     "fastapi>=0.135.1",
     "langchain>=1.2.10",
     "langchain-community>=0.4.1",
@@ -14,8 +15,11 @@ dependencies = [
     "langchain-qdrant>=1.1.0",
     "langgraph>=1.0.10",
     "langsmith>=0.7.16",
+    "pgvector>=0.4.2",
+    "psycopg2-binary>=2.9.11",
     "python-dotenv>=1.2.2",
     "qdrant-client>=1.17.1",
+    "sqlalchemy>=2.0.48",
     "textual>=8.1.1",
     "uvicorn>=0.42.0",
 ]
