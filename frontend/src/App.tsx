@@ -986,6 +986,13 @@ function App() {
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    if (typeof window === "undefined") {
+      return true;
+    }
+
+    return window.innerWidth >= 1024;
+  });
 
   const abortRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -1237,6 +1244,14 @@ function App() {
     setCodeContext("");
     setShowCodeContext(false);
     setActiveThreadId(null);
+  };
+
+  const handleThreadSelect = (threadId: string) => {
+    setActiveThreadId(threadId);
+
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      setIsSidebarOpen(false);
+    }
   };
 
   const updateThreadMessages = (
@@ -1513,17 +1528,41 @@ function App() {
   };
 
   return (
-    <div className="flex min-h-screen bg-black text-zinc-100">
-      <aside className="hidden w-[290px] shrink-0 border-r border-white/10 bg-black/95 lg:flex">
-        <div className="flex w-full flex-col px-4 py-5">
-          <div className="mb-4 flex items-center gap-3 rounded-2xl border border-white/10 bg-zinc-900 px-4 py-3 shadow-glow">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-800 text-zinc-100">
-              <SparkIcon />
+    <div className="flex h-screen overflow-hidden bg-black text-zinc-100">
+      {isSidebarOpen ? (
+        <button
+          aria-label="Close sidebar backdrop"
+          className="fixed inset-0 z-20 bg-black/55 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+          type="button"
+        />
+      ) : null}
+
+      <aside
+        className={`${
+          isSidebarOpen ? "flex" : "hidden"
+        } fixed inset-y-0 left-0 z-30 h-full w-[290px] shrink-0 border-r border-white/10 bg-black/95 lg:static lg:z-auto`}
+      >
+        <div className="flex h-full min-h-0 w-full flex-col px-4 py-5">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-white/10 bg-zinc-900 px-4 py-3 shadow-glow">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-800 text-zinc-100">
+                <SparkIcon />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold tracking-wide text-zinc-100">Codebot</p>
+                <p className="truncate text-xs text-zinc-400">Streaming AI assistant</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-semibold tracking-wide text-zinc-100">Codebot</p>
-              <p className="text-xs text-zinc-400">Streaming AI assistant</p>
-            </div>
+
+            <button
+              aria-label="Close sidebar"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-zinc-900 text-zinc-200 transition hover:bg-zinc-800"
+              onClick={() => setIsSidebarOpen(false)}
+              type="button"
+            >
+              <SidebarToggleIcon />
+            </button>
           </div>
 
           <button
@@ -1552,15 +1591,13 @@ function App() {
             <span>{threads.length}</span>
           </div>
 
-          <div className="flex-1 space-y-2 overflow-y-auto pr-1">
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
             {filteredThreads.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-white/10 bg-zinc-950 p-4 text-sm text-zinc-400">
                 {isBootstrapping ? "Preparing secure chat session..." : "No chats yet. Start a conversation to populate the sidebar."}
               </div>
             ) : (
               filteredThreads.map((thread) => {
-                const lastMessage = thread.preview || thread.messages[thread.messages.length - 1]?.content || "No messages yet";
-
                 return (
                   <button
                     className={`group w-full rounded-2xl border px-3 py-3 text-left transition ${
@@ -1569,20 +1606,10 @@ function App() {
                         : "border-white/5 bg-zinc-950 hover:border-white/10 hover:bg-zinc-900"
                     }`}
                     key={thread.id}
-                    onClick={() => setActiveThreadId(thread.id)}
+                    onClick={() => handleThreadSelect(thread.id)}
                     type="button"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-zinc-100">{thread.title}</p>
-                        <p className="mt-1 line-clamp-2 text-xs text-zinc-400">{lastMessage}</p>
-                      </div>
-                      <span className="text-[11px] text-zinc-500">{formatRelativeTime(thread.updatedAt)}</span>
-                    </div>
-                    <div className="mt-3 flex items-center justify-between text-[11px] text-zinc-500">
-                      <span>{thread.messageCount} messages</span>
-                      <span>{thread.mode}</span>
-                    </div>
+                    <p className="truncate text-sm font-medium text-zinc-100">{thread.title}</p>
                   </button>
                 );
               })
@@ -1601,8 +1628,42 @@ function App() {
         </div>
       </aside>
 
-      <main className="flex min-h-screen flex-1 flex-col">
-        <header className="sticky top-0 z-10 border-b border-white/10 bg-black/80 backdrop-blur">
+      {!isSidebarOpen ? (
+        <aside className="hidden h-full w-[72px] shrink-0 border-r border-white/10 bg-black/95 lg:flex lg:flex-col lg:items-center lg:px-3 lg:py-5">
+          <button
+            aria-label="Open sidebar"
+            className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-zinc-900 text-zinc-200 transition hover:bg-zinc-800"
+            onClick={() => setIsSidebarOpen(true)}
+            title="Open sidebar"
+            type="button"
+          >
+            <SidebarToggleIcon />
+          </button>
+
+          <button
+            aria-label="New chat"
+            className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-zinc-900 text-zinc-200 transition hover:bg-zinc-800"
+            onClick={startFreshChat}
+            title="New chat"
+            type="button"
+          >
+            <EditIcon />
+          </button>
+
+          <button
+            aria-label="Open search"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-zinc-900 text-zinc-200 transition hover:bg-zinc-800"
+            onClick={() => setIsSidebarOpen(true)}
+            title="Open search"
+            type="button"
+          >
+            <SearchIcon />
+          </button>
+        </aside>
+      ) : null}
+
+      <main className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+        <header className="shrink-0 border-b border-white/10 bg-black/80 backdrop-blur">
           <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
             <div>
               <p className="text-xs uppercase tracking-[0.26em] text-zinc-500">Codebot workspace</p>
@@ -1640,74 +1701,77 @@ function App() {
           </div>
         </header>
 
-        <div className="relative flex-1">
+        <div className="relative min-h-0 flex-1">
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.05),_transparent_22%),radial-gradient(circle_at_bottom_right,_rgba(255,255,255,0.04),_transparent_18%)]" />
 
-          <div className="relative mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 pb-40 pt-6 sm:px-6">
-            {activeThread && !activeThread.messagesLoaded && isLoadingMessages ? (
-              <section className="mx-auto mt-8 w-full max-w-3xl rounded-[32px] border border-white/10 bg-zinc-950 p-8 shadow-glow">
-                <p className="text-sm text-zinc-400">Loading chat history...</p>
-              </section>
-            ) : activeThread?.messages.length ? (
-              <div className="space-y-8">
-                {activeThread.messages.map((message) => (
-                  <div
-                    className={`flex animate-rise ${message.role === "user" ? "justify-end" : "justify-start"}`}
-                    key={message.id}
-                  >
-                    {message.role === "user" ? (
-                      <section className="max-w-[70%] rounded-[28px] bg-zinc-800 px-5 py-3 text-right shadow-lg">
-                        <div className="message-content text-sm leading-7 text-zinc-100">
-                          {message.content}
-                        </div>
-                      </section>
-                    ) : (
-                      <section className="w-full max-w-3xl px-2 py-1">
-                        <AssistantMessageContent
-                          content={message.content}
-                          isStreaming={isStreaming && message.id === activeThread.messages[activeThread.messages.length - 1]?.id}
-                        />
-                      </section>
-                    )}
+          <div className="relative flex h-full min-h-0 flex-col">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              <div className="relative mx-auto flex w-full max-w-5xl flex-col px-4 py-6 sm:px-6">
+                {activeThread && !activeThread.messagesLoaded && isLoadingMessages ? (
+                  <section className="mx-auto mt-8 w-full max-w-3xl rounded-[32px] border border-white/10 bg-zinc-950 p-8 shadow-glow">
+                    <p className="text-sm text-zinc-400">Loading chat history...</p>
+                  </section>
+                ) : activeThread?.messages.length ? (
+                  <div className="space-y-8 pb-8">
+                    {activeThread.messages.map((message) => (
+                      <div
+                        className={`flex animate-rise ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                        key={message.id}
+                      >
+                        {message.role === "user" ? (
+                          <section className="max-w-[70%] rounded-[28px] bg-zinc-800 px-5 py-3 text-right shadow-lg">
+                            <div className="message-content text-sm leading-7 text-zinc-100">
+                              {message.content}
+                            </div>
+                          </section>
+                        ) : (
+                          <section className="w-full max-w-3xl px-2 py-1">
+                            <AssistantMessageContent
+                              content={message.content}
+                              isStreaming={isStreaming && message.id === activeThread.messages[activeThread.messages.length - 1]?.id}
+                            />
+                          </section>
+                        )}
+                      </div>
+                    ))}
+                    <div ref={messagesEndRef} />
                   </div>
-                ))}
-                <div ref={messagesEndRef} />
+                ) : (
+                  <section className="mx-auto mt-8 w-full max-w-3xl rounded-[32px] border border-white/10 bg-zinc-950 p-8 shadow-glow">
+                    <div className="mb-6 flex items-center gap-4">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-zinc-900 text-zinc-100">
+                        <SparkIcon />
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">Frontend ready</p>
+                        <h2 className="mt-2 text-3xl font-semibold text-zinc-50">Ask Codebot anything</h2>
+                      </div>
+                    </div>
+
+                    <p className="max-w-2xl text-sm leading-7 text-zinc-400">
+                      This UI now uses backend chat threads and JWT-authenticated history instead of relying on local-only
+                      sidebar state.
+                    </p>
+
+                    <div className="mt-8 grid gap-3 sm:grid-cols-2">
+                      {starterPrompts.map((prompt) => (
+                        <button
+                          className="rounded-2xl border border-white/10 bg-zinc-900 px-4 py-4 text-left text-sm text-zinc-200 transition hover:bg-zinc-800"
+                          key={prompt}
+                          onClick={() => void sendMessage(prompt)}
+                          type="button"
+                        >
+                          {prompt}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
               </div>
-            ) : (
-              <section className="mx-auto mt-8 w-full max-w-3xl rounded-[32px] border border-white/10 bg-zinc-950 p-8 shadow-glow">
-                <div className="mb-6 flex items-center gap-4">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-zinc-900 text-zinc-100">
-                    <SparkIcon />
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">Frontend ready</p>
-                    <h2 className="mt-2 text-3xl font-semibold text-zinc-50">Ask Codebot anything</h2>
-                  </div>
-                </div>
+            </div>
 
-                <p className="max-w-2xl text-sm leading-7 text-zinc-400">
-                  This UI now uses backend chat threads and JWT-authenticated history instead of relying on local-only
-                  sidebar state.
-                </p>
-
-                <div className="mt-8 grid gap-3 sm:grid-cols-2">
-                  {starterPrompts.map((prompt) => (
-                    <button
-                      className="rounded-2xl border border-white/10 bg-zinc-900 px-4 py-4 text-left text-sm text-zinc-200 transition hover:bg-zinc-800"
-                      key={prompt}
-                      onClick={() => void sendMessage(prompt)}
-                      type="button"
-                    >
-                      {prompt}
-                    </button>
-                  ))}
-                </div>
-              </section>
-            )}
-          </div>
-
-          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-white/10 bg-black/90 px-4 py-4 backdrop-blur sm:px-6">
-            <div className="mx-auto w-full max-w-5xl">
+            <div className="shrink-0 border-t border-white/10 bg-black/90 px-4 py-4 backdrop-blur sm:px-6">
+              <div className="mx-auto w-full max-w-5xl">
               {showCodeContext ? (
                 <div className="mb-3 rounded-3xl border border-white/10 bg-zinc-950 p-4">
                   <div className="mb-2 flex items-center justify-between">
@@ -1773,7 +1837,8 @@ function App() {
                 </div>
               </div>
 
-              {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
+                {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
+              </div>
             </div>
           </div>
         </div>
@@ -1840,6 +1905,15 @@ function CopyIcon() {
         strokeLinecap="round"
         strokeWidth="1.8"
       />
+    </svg>
+  );
+}
+
+function SidebarToggleIcon() {
+  return (
+    <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
+      <rect height="14" rx="2.5" stroke="currentColor" strokeWidth="1.8" width="16" x="4" y="5" />
+      <path d="M10 5V19" stroke="currentColor" strokeWidth="1.8" />
     </svg>
   );
 }
