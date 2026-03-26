@@ -1,6 +1,6 @@
 # Code generator bot
 
-(Codebot) ubuntu@ubuntu:~/Documents/test/Codebot/Codebot$ uvicorn bot.application.main:app --reload --host localhost --port 8000
+(Codebot) ubuntu@ubuntu:~/Documents/test/Codebot/Codebot$ uvicorn backend.bot.application.main:app --reload --port 8001
 
 # phase -4 approch
 🔥 NEXT LEVEL (Phase 4 — REAL MAGIC)

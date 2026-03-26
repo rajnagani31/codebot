@@ -1,11 +1,12 @@
 # openai_tool/openai_tool_graph.py
 
-from typing import Annotated, TypedDict, Literal, Optional
+from typing import Annotated, TypedDict, Literal
 import asyncio
 import sys
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from langchain_core.messages import HumanMessage, ToolMessage, AIMessage, BaseMessage
+from langchain_core.runnables import RunnableConfig
 from bot.workflow.qudrant.vector_service import VectorService
 from bot.workflow.openai_flow.system.system_helper import GetSytemInstruction
 
@@ -50,20 +51,20 @@ class OpenAIToolGraph:
         # start compiantion
         self.app = self.graph.compile()
 
-    async def agent_response(self, state: State):
+    async def agent_response(self, state: State, config: RunnableConfig | None = None):
         """Agent: LLM decides which tools to call"""
         print("🧠 Agent streaming response...")
 
         messages = state["messages"]
         previous_context = state.get("previous_context", "")
+        latest_message = str(messages[-1].content).strip()
 
         # greeting shortcut
-        if messages[-1].content.lower() in ["hi", "hello", "hi, thier"]:
-            print('it\'s working')
-            return {"messages": [AIMessage(content="Hello! How can I assist you today?!!")]}
+        # if self._is_casual_message(latest_message):
+        #     return {"messages": [AIMessage(content=self._build_casual_reply(latest_message))]}
 
         # STREAM the LLM response
-        response = await self.stream_llm(messages, previous_context)
+        response = await self.stream_llm(messages, previous_context, config=config)
 
         # print("\nLLM final message:", response)
 
@@ -77,24 +78,7 @@ class OpenAIToolGraph:
         if not isinstance(last_message, AIMessage) or not getattr(last_message, "tool_calls", None):
             return state
 
-        tool_messages = []
-        for tool_call in last_message.tool_calls:
-            tool_name = tool_call["name"]
-            tool_args = tool_call.get("args", {})
-
-            # Execute tool
-            for t in self.tools:
-                if t.name == tool_name:
-                    result = t.invoke(tool_args)
-                    tool_messages.append(
-                        ToolMessage(
-                            content=result,
-                            tool_call_id=tool_call.get("id"),
-                            name=tool_name,
-                        )
-                    )
-                    print(f"✅ Tool executed: {tool_name}({tool_args}) -> {result}")
-                    break
+        tool_messages = self._execute_tool_calls(last_message)
 
         return {"messages": state["messages"] + tool_messages}
 
@@ -105,7 +89,12 @@ class OpenAIToolGraph:
             return "tools"
         return END
 
-    async def stream_llm(self, messages: list, previous_context: str = "") -> AIMessage:
+    async def stream_llm(
+        self,
+        messages: list,
+        previous_context: str = "",
+        config: RunnableConfig | None = None,
+    ) -> AIMessage:
         """Stream tokens while preserving tool calls"""
 
         accumulated = None
@@ -117,7 +106,7 @@ class OpenAIToolGraph:
             previous_context=previous_context
         )
 
-        async for chunk in self.llm._chat_model.astream(full_message):
+        async for chunk in self.llm._chat_model.astream(full_message, config=config):
 
             if chunk.content:
                 sys.stdout.flush()
@@ -128,6 +117,69 @@ class OpenAIToolGraph:
                 accumulated = accumulated + chunk
 
         return accumulated
+
+    def _is_casual_message(self, content: str) -> bool:
+        normalized = " ".join(content.lower().split())
+        casual_messages = {
+            "hi",
+            "hello",
+            "hey",
+            "hi there",
+            "hello there",
+            "good morning",
+            "good afternoon",
+            "good evening",
+            "how are you",
+            "how are you?",
+            "how r u",
+            "what's up",
+            "whats up",
+            "who are you",
+            "thank you",
+            "thanks",
+            "ok",
+            "okay",
+        }
+
+        return normalized in casual_messages
+
+    def _build_casual_reply(self, content: str) -> str:
+        normalized = " ".join(content.lower().split())
+
+        if normalized in {"thank you", "thanks"}:
+            return "You're welcome. Tell me what you want to work on."
+
+        if normalized in {"who are you"}:
+            return "I’m Codebot. I can help with code, APIs, databases, and app issues."
+
+        if normalized in {"how are you", "how are you?", "how r u", "what's up", "whats up"}:
+            return "I’m ready to help. Tell me what you want to do."
+
+        return "Hello. What do you want help with?"
+
+    def _execute_tool_calls(self, message: AIMessage) -> list[ToolMessage]:
+        tool_messages = []
+
+        for tool_call in message.tool_calls:
+            tool_name = tool_call["name"]
+            tool_args = tool_call.get("args", {})
+
+            for tool in self.tools:
+                if tool.name != tool_name:
+                    continue
+
+                result = tool.invoke(tool_args)
+                tool_messages.append(
+                    ToolMessage(
+                        content=result,
+                        tool_call_id=tool_call.get("id"),
+                        name=tool_name,
+                    )
+                )
+                print(f"✅ Tool executed: {tool_name}({tool_args}) -> {result}")
+                break
+
+        return tool_messages
 
     async def run_streaming(self, query):
         """Interactive loop using LangGraph streaming"""
