@@ -1,19 +1,61 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 type ChatMode = "chat" | "code" | "debug" | "review";
+type MessageStatus = "pending" | "streaming" | "completed" | "failed" | "stopped";
 
 type Message = {
   id: string;
   role: "user" | "assistant";
   content: string;
   createdAt: string;
+  status: MessageStatus;
 };
 
 type Thread = {
   id: string;
   title: string;
   updatedAt: string;
+  mode: ChatMode;
+  preview: string;
+  messageCount: number;
+  messagesLoaded: boolean;
   messages: Message[];
+};
+
+type SessionUser = {
+  id: number;
+  sessionLabel: string;
+};
+
+type AuthSessionResponse = {
+  token: string;
+  user_id: number;
+  session_label: string;
+  expires_at: number;
+};
+
+type ThreadSummaryResponse = {
+  id: string;
+  title: string;
+  mode: ChatMode;
+  updated_at: string;
+  last_message_at: string | null;
+  preview: string;
+  message_count: number;
+};
+
+type MessageResponse = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  status: MessageStatus;
+  created_at: string;
+  completed_at: string | null;
+};
+
+type ParsedStreamEvent = {
+  event: string;
+  data: Record<string, unknown>;
 };
 
 type ContentBlock =
@@ -60,9 +102,9 @@ type StructuredAnswer = {
   examples: StructuredCodeExample[];
 };
 
-const THREADS_STORAGE_KEY = "codebot_threads";
 const ACTIVE_THREAD_STORAGE_KEY = "codebot_active_thread";
-const USER_ID_STORAGE_KEY = "codebot_user_id";
+const AUTH_TOKEN_STORAGE_KEY = "codebot_auth_token";
+const CLIENT_SESSION_STORAGE_KEY = "codebot_client_session_id";
 
 const starterPrompts = [
   "Review this function and suggest optimizations",
@@ -75,19 +117,27 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-function getStoredUserId() {
-  const saved = window.localStorage.getItem(USER_ID_STORAGE_KEY);
+function getStoredAuthToken() {
+  return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+}
+
+function storeAuthToken(token: string) {
+  window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+}
+
+function clearStoredAuthToken() {
+  window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+}
+
+function getClientSessionId() {
+  const saved = window.localStorage.getItem(CLIENT_SESSION_STORAGE_KEY);
 
   if (saved) {
-    const parsed = Number(saved);
-
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
+    return saved;
   }
 
-  const generated = Math.floor(100000 + Math.random() * 900000);
-  window.localStorage.setItem(USER_ID_STORAGE_KEY, String(generated));
+  const generated = `session-${crypto.randomUUID()}`;
+  window.localStorage.setItem(CLIENT_SESSION_STORAGE_KEY, generated);
   return generated;
 }
 
@@ -101,27 +151,94 @@ function formatRelativeTime(value: string) {
   }).format(date);
 }
 
-function createMessage(role: Message["role"], content: string): Message {
+function createMessage(
+  role: Message["role"],
+  content: string,
+  options?: Partial<Pick<Message, "id" | "createdAt" | "status">>,
+): Message {
   return {
-    id: uid(),
+    id: options?.id ?? uid(),
     role,
     content,
-    createdAt: new Date().toISOString(),
+    createdAt: options?.createdAt ?? new Date().toISOString(),
+    status: options?.status ?? "completed",
   };
 }
 
-function loadThreads() {
-  const saved = window.localStorage.getItem(THREADS_STORAGE_KEY);
+function mapThreadSummary(thread: ThreadSummaryResponse, current?: Thread): Thread {
+  return {
+    id: thread.id,
+    title: thread.title,
+    updatedAt: thread.updated_at,
+    mode: thread.mode,
+    preview: thread.preview,
+    messageCount: thread.message_count,
+    messagesLoaded: current?.messagesLoaded ?? false,
+    messages: current?.messages ?? [],
+  };
+}
 
-  if (!saved) {
-    return [];
-  }
+function mapMessageResponse(message: MessageResponse): Message {
+  return {
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    createdAt: message.created_at,
+    status: message.status,
+  };
+}
 
+function mergeThreads(current: Thread[], incoming: ThreadSummaryResponse[]) {
+  const currentById = new Map(current.map((thread) => [thread.id, thread]));
+  return incoming
+    .map((thread) => mapThreadSummary(thread, currentById.get(thread.id)))
+    .sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt));
+}
+
+async function readErrorMessage(response: Response) {
   try {
-    return JSON.parse(saved) as Thread[];
+    const payload = (await response.json()) as { detail?: string };
+    return payload.detail || `Request failed with status ${response.status}`;
   } catch {
-    return [];
+    return `Request failed with status ${response.status}`;
   }
+}
+
+function parseSseBuffer(buffer: string) {
+  const rawEvents = buffer.split("\n\n");
+  const remainder = rawEvents.pop() ?? "";
+  const events: ParsedStreamEvent[] = [];
+
+  for (const rawEvent of rawEvents) {
+    const lines = rawEvent.split("\n");
+    let event = "message";
+    const dataLines: string[] = [];
+
+    for (const line of lines) {
+      if (line.startsWith("event:")) {
+        event = line.slice("event:".length).trim();
+      }
+
+      if (line.startsWith("data:")) {
+        dataLines.push(line.slice("data:".length).trim());
+      }
+    }
+
+    if (!dataLines.length) {
+      continue;
+    }
+
+    try {
+      events.push({
+        event,
+        data: JSON.parse(dataLines.join("\n")) as Record<string, unknown>,
+      });
+    } catch {
+      continue;
+    }
+  }
+
+  return { events, remainder };
 }
 
 function isSpecialBlockStart(line: string) {
@@ -865,32 +982,184 @@ function App() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  const [userId, setUserId] = useState<number | null>(null);
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    if (typeof window === "undefined") {
+      return true;
+    }
+
+    return window.innerWidth >= 1024;
+  });
 
   const abortRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  useEffect(() => {
-    const initialThreads = loadThreads();
-    const initialActiveThread = window.localStorage.getItem(ACTIVE_THREAD_STORAGE_KEY);
+  const activeThread = useMemo(() => {
+    return threads.find((thread) => thread.id === activeThreadId) ?? null;
+  }, [threads, activeThreadId]);
 
-    setThreads(initialThreads);
-    setActiveThreadId(initialActiveThread ?? initialThreads[0]?.id ?? null);
-    setUserId(getStoredUserId());
-  }, []);
+  const loadThreadsFromApi = async (token: string, preferredThreadId?: string | null) => {
+    const response = await fetch("/api/threads", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
-  useEffect(() => {
-    window.localStorage.setItem(THREADS_STORAGE_KEY, JSON.stringify(threads));
-  }, [threads]);
+    if (!response.ok) {
+      throw new Error(await readErrorMessage(response));
+    }
 
-  useEffect(() => {
-    if (activeThreadId) {
-      window.localStorage.setItem(ACTIVE_THREAD_STORAGE_KEY, activeThreadId);
+    const data = (await response.json()) as ThreadSummaryResponse[];
+    setThreads((current) => mergeThreads(current, data));
+    setActiveThreadId((current) => {
+      const nextId = preferredThreadId ?? current;
+
+      if (nextId && data.some((thread) => thread.id === nextId)) {
+        return nextId;
+      }
+
+      return data[0]?.id ?? null;
+    });
+  };
+
+  const loadMessagesForThread = async (threadId: string, tokenOverride?: string | null) => {
+    const resolvedToken = tokenOverride ?? authToken;
+
+    if (!resolvedToken) {
       return;
     }
 
-    window.localStorage.removeItem(ACTIVE_THREAD_STORAGE_KEY);
+    setIsLoadingMessages(true);
+
+    try {
+      const response = await fetch(`/api/threads/${threadId}/messages`, {
+        headers: {
+          Authorization: `Bearer ${resolvedToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response));
+      }
+
+      const data = (await response.json()) as MessageResponse[];
+      const nextMessages = data.map(mapMessageResponse);
+
+      setThreads((current) =>
+        current
+          .map((thread) => {
+            if (thread.id !== threadId) {
+              return thread;
+            }
+
+            return {
+              ...thread,
+              messages: nextMessages,
+              messagesLoaded: true,
+              preview: nextMessages[nextMessages.length - 1]?.content ?? thread.preview,
+              messageCount: nextMessages.length,
+              updatedAt: nextMessages[nextMessages.length - 1]?.createdAt ?? thread.updatedAt,
+            };
+          })
+          .sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt)),
+      );
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Failed to load chat messages.");
+    } finally {
+      setIsLoadingMessages(false);
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const bootstrapSession = async () => {
+      try {
+        const storedToken = getStoredAuthToken();
+
+        if (storedToken) {
+          const meResponse = await fetch("/api/auth/me", {
+            headers: {
+              Authorization: `Bearer ${storedToken}`,
+            },
+          });
+
+          if (meResponse.ok) {
+            const user = (await meResponse.json()) as { id: number; session_label: string };
+
+            if (!cancelled) {
+              setAuthToken(storedToken);
+              setSessionUser({
+                id: user.id,
+                sessionLabel: user.session_label,
+              });
+            }
+
+            return;
+          }
+
+          clearStoredAuthToken();
+        }
+
+        const guestResponse = await fetch("/api/auth/guest", {
+          method: "POST",
+        });
+
+        if (!guestResponse.ok) {
+          throw new Error(await readErrorMessage(guestResponse));
+        }
+
+        const session = (await guestResponse.json()) as AuthSessionResponse;
+
+        if (!cancelled) {
+          storeAuthToken(session.token);
+          setAuthToken(session.token);
+          setSessionUser({
+            id: session.user_id,
+            sessionLabel: session.session_label,
+          });
+        }
+      } catch (bootstrapError) {
+        if (!cancelled) {
+          setError(bootstrapError instanceof Error ? bootstrapError.message : "Failed to create session.");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsBootstrapping(false);
+        }
+      }
+    };
+
+    void bootstrapSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!authToken) {
+      return;
+    }
+
+    const preferredThreadId = window.localStorage.getItem(ACTIVE_THREAD_STORAGE_KEY);
+
+    void loadThreadsFromApi(authToken, preferredThreadId).catch((loadError) => {
+      setError(loadError instanceof Error ? loadError.message : "Failed to load chats.");
+    });
+  }, [authToken]);
+
+  useEffect(() => {
+    if (!activeThreadId) {
+      window.localStorage.removeItem(ACTIVE_THREAD_STORAGE_KEY);
+      return;
+    }
+
+    window.localStorage.setItem(ACTIVE_THREAD_STORAGE_KEY, activeThreadId);
   }, [activeThreadId]);
 
   useEffect(() => {
@@ -907,6 +1176,20 @@ function App() {
     element.style.height = `${Math.min(element.scrollHeight, 240)}px`;
   }, [input]);
 
+  useEffect(() => {
+    if (!authToken || !activeThreadId) {
+      return;
+    }
+
+    const thread = threads.find((entry) => entry.id === activeThreadId);
+
+    if (!thread || thread.messagesLoaded) {
+      return;
+    }
+
+    void loadMessagesForThread(activeThreadId, authToken);
+  }, [authToken, activeThreadId, threads]);
+
   const filteredThreads = useMemo(() => {
     const query = search.trim().toLowerCase();
 
@@ -917,46 +1200,58 @@ function App() {
     return threads.filter((thread) => {
       return (
         thread.title.toLowerCase().includes(query) ||
+        thread.preview.toLowerCase().includes(query) ||
         thread.messages.some((message) => message.content.toLowerCase().includes(query))
       );
     });
   }, [threads, search]);
 
-  const activeThread = useMemo(() => {
-    return threads.find((thread) => thread.id === activeThreadId) ?? null;
-  }, [threads, activeThreadId]);
+  const createThread = async (firstPrompt?: string) => {
+    if (!authToken) {
+      throw new Error("Session not ready.");
+    }
 
-  const createThread = (firstPrompt?: string) => {
-    const thread: Thread = {
-      id: uid(),
-      title: firstPrompt?.slice(0, 40) || "New conversation",
-      updatedAt: new Date().toISOString(),
-      messages: [],
-    };
+    const response = await fetch("/api/threads", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: firstPrompt?.slice(0, 48) || "New conversation",
+        mode,
+        client_session_id: getClientSessionId(),
+      }),
+    });
 
-    setThreads((current) => [thread, ...current]);
+    if (!response.ok) {
+      throw new Error(await readErrorMessage(response));
+    }
+
+    const thread = (await response.json()) as ThreadSummaryResponse;
+    setThreads((current) => mergeThreads(current, [thread]));
     setActiveThreadId(thread.id);
     return thread.id;
   };
 
   const startFreshChat = () => {
+    if (isStreaming) {
+      return;
+    }
+
     setInput("");
     setError("");
     setCodeContext("");
     setShowCodeContext(false);
-    createThread();
+    setActiveThreadId(null);
   };
 
-  const deleteThread = (threadId: string) => {
-    setThreads((current) => {
-      const nextThreads = current.filter((thread) => thread.id !== threadId);
+  const handleThreadSelect = (threadId: string) => {
+    setActiveThreadId(threadId);
 
-      if (activeThreadId === threadId) {
-        setActiveThreadId(nextThreads[0]?.id ?? null);
-      }
-
-      return nextThreads;
-    });
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      setIsSidebarOpen(false);
+    }
   };
 
   const updateThreadMessages = (
@@ -971,11 +1266,17 @@ function App() {
             return thread;
           }
 
+          const nextMessages = updater(thread.messages);
+          const lastMessage = nextMessages[nextMessages.length - 1];
+
           return {
             ...thread,
             title: nextTitle ?? thread.title,
             updatedAt: new Date().toISOString(),
-            messages: updater(thread.messages),
+            preview: lastMessage?.content ?? thread.preview,
+            messageCount: nextMessages.length,
+            messagesLoaded: true,
+            messages: nextMessages,
           };
         })
         .sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt)),
@@ -991,34 +1292,61 @@ function App() {
   const sendMessage = async (presetPrompt?: string) => {
     const prompt = (presetPrompt ?? input).trim();
 
-    if (!prompt || isStreaming || !userId) {
+    if (!prompt || isStreaming || !authToken) {
       return;
     }
 
     setError("");
     setInput("");
 
-    const threadId = activeThread?.id ?? createThread(prompt);
-    const userMessage = createMessage("user", prompt);
-    const assistantMessage = createMessage("assistant", "");
-    const title = prompt.slice(0, 48);
+    let threadId = activeThread?.id;
 
-    updateThreadMessages(threadId, (messages) => [...messages, userMessage, assistantMessage], title);
+    if (!threadId) {
+      try {
+        threadId = await createThread(prompt);
+      } catch (threadError) {
+        setError(threadError instanceof Error ? threadError.message : "Failed to create chat.");
+        return;
+      }
+    }
+
+    const title = prompt.slice(0, 48);
+    const tempUserMessageId = `temp-user-${uid()}`;
+    const tempAssistantMessageId = `temp-assistant-${uid()}`;
+    const optimisticUserMessage = createMessage("user", prompt, {
+      id: tempUserMessageId,
+      status: "completed",
+    });
+    const optimisticAssistantMessage = createMessage("assistant", "", {
+      id: tempAssistantMessageId,
+      status: "streaming",
+    });
+
+    updateThreadMessages(
+      threadId,
+      (messages) => [...messages, optimisticUserMessage, optimisticAssistantMessage],
+      title,
+    );
     setActiveThreadId(threadId);
     setIsStreaming(true);
 
     const controller = new AbortController();
     abortRef.current = controller;
 
+    let currentUserMessageId = tempUserMessageId;
+    let currentAssistantMessageId = tempAssistantMessageId;
+    let sseBuffer = "";
+
     try {
-      const response = await fetch("/api/chat", {
+      const response = await fetch("/api/chat/stream", {
         method: "POST",
         headers: {
+          Authorization: `Bearer ${authToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          thread_id: threadId,
           query: prompt,
-          user_id: userId,
           code: codeContext || null,
           mode,
         }),
@@ -1026,7 +1354,7 @@ function App() {
       });
 
       if (!response.ok || !response.body) {
-        throw new Error(`Request failed with status ${response.status}`);
+        throw new Error(await readErrorMessage(response));
       }
 
       const reader = response.body.getReader();
@@ -1039,15 +1367,121 @@ function App() {
           break;
         }
 
-        const chunk = decoder.decode(value, { stream: true });
+        sseBuffer += decoder.decode(value, { stream: true });
+        const parsed = parseSseBuffer(sseBuffer);
+        sseBuffer = parsed.remainder;
 
-        updateThreadMessages(threadId, (messages) =>
-          messages.map((message) =>
-            message.id === assistantMessage.id
-              ? { ...message, content: `${message.content}${chunk}` }
-              : message,
-          ),
-        );
+        for (const event of parsed.events) {
+          if (event.event === "message.created") {
+            const payload = event.data as {
+              user_message: {
+                id: string;
+                created_at: string;
+                status: MessageStatus;
+              };
+              assistant_message: {
+                id: string;
+                created_at: string;
+                status: MessageStatus;
+              };
+            };
+
+            currentUserMessageId = payload.user_message.id;
+            currentAssistantMessageId = payload.assistant_message.id;
+
+            updateThreadMessages(threadId, (messages) =>
+              messages.map((message) => {
+                if (message.id === tempUserMessageId) {
+                  return {
+                    ...message,
+                    id: payload.user_message.id,
+                    createdAt: payload.user_message.created_at,
+                    status: payload.user_message.status,
+                  };
+                }
+
+                if (message.id === tempAssistantMessageId) {
+                  return {
+                    ...message,
+                    id: payload.assistant_message.id,
+                    createdAt: payload.assistant_message.created_at,
+                    status: payload.assistant_message.status,
+                  };
+                }
+
+                return message;
+              }),
+            );
+          }
+
+          if (event.event === "message.delta") {
+            const payload = event.data as {
+              assistant_message_id: string;
+              delta: string;
+            };
+
+            currentAssistantMessageId = payload.assistant_message_id;
+
+            updateThreadMessages(threadId, (messages) =>
+              messages.map((message) =>
+                message.id === currentAssistantMessageId || message.id === tempAssistantMessageId
+                  ? {
+                      ...message,
+                      id: currentAssistantMessageId,
+                      content: `${message.content}${payload.delta}`,
+                      status: "streaming",
+                    }
+                  : message,
+              ),
+            );
+          }
+
+          if (event.event === "message.completed") {
+            const payload = event.data as {
+              assistant_message_id: string;
+              content: string;
+            };
+
+            currentAssistantMessageId = payload.assistant_message_id;
+
+            updateThreadMessages(threadId, (messages) =>
+              messages.map((message) =>
+                message.id === currentAssistantMessageId || message.id === tempAssistantMessageId
+                  ? {
+                      ...message,
+                      id: currentAssistantMessageId,
+                      content: payload.content ?? message.content,
+                      status: "completed",
+                    }
+                  : message,
+              ),
+            );
+          }
+
+          if (event.event === "message.failed") {
+            const payload = event.data as {
+              assistant_message_id: string;
+              content?: string;
+              error?: string;
+            };
+
+            currentAssistantMessageId = payload.assistant_message_id;
+            setError(payload.error || "Streaming failed.");
+
+            updateThreadMessages(threadId, (messages) =>
+              messages.map((message) =>
+                message.id === currentAssistantMessageId || message.id === tempAssistantMessageId
+                  ? {
+                      ...message,
+                      id: currentAssistantMessageId,
+                      content: payload.content || message.content || payload.error || "Streaming failed.",
+                      status: "failed",
+                    }
+                  : message,
+              ),
+            );
+          }
+        }
       }
     } catch (streamError) {
       const message =
@@ -1060,15 +1494,29 @@ function App() {
       setError(message);
 
       updateThreadMessages(threadId, (messages) =>
-        messages.map((entry) =>
-          entry.id === assistantMessage.id && !entry.content
-            ? { ...entry, content: message }
-            : entry,
-        ),
+        messages.map((entry) => {
+          if (entry.id !== currentAssistantMessageId && entry.id !== tempAssistantMessageId) {
+            return entry;
+          }
+
+          return {
+            ...entry,
+            id: currentAssistantMessageId,
+            content: entry.content || message,
+            status: streamError instanceof Error && streamError.name === "AbortError" ? "stopped" : "failed",
+          };
+        }),
       );
     } finally {
       abortRef.current = null;
       setIsStreaming(false);
+
+      try {
+        await loadThreadsFromApi(authToken, threadId);
+        await loadMessagesForThread(threadId, authToken);
+      } catch (syncError) {
+        setError(syncError instanceof Error ? syncError.message : "Failed to refresh chat history.");
+      }
     }
   };
 
@@ -1080,17 +1528,41 @@ function App() {
   };
 
   return (
-    <div className="flex min-h-screen bg-black text-zinc-100">
-      <aside className="hidden w-[290px] shrink-0 border-r border-white/10 bg-black/95 lg:flex">
-        <div className="flex w-full flex-col px-4 py-5">
-          <div className="mb-4 flex items-center gap-3 rounded-2xl border border-white/10 bg-zinc-900 px-4 py-3 shadow-glow">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-800 text-zinc-100">
-              <SparkIcon />
+    <div className="flex h-screen overflow-hidden bg-black text-zinc-100">
+      {isSidebarOpen ? (
+        <button
+          aria-label="Close sidebar backdrop"
+          className="fixed inset-0 z-20 bg-black/55 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+          type="button"
+        />
+      ) : null}
+
+      <aside
+        className={`${
+          isSidebarOpen ? "flex" : "hidden"
+        } fixed inset-y-0 left-0 z-30 h-full w-[290px] shrink-0 border-r border-white/10 bg-black/95 lg:static lg:z-auto`}
+      >
+        <div className="flex h-full min-h-0 w-full flex-col px-4 py-5">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-white/10 bg-zinc-900 px-4 py-3 shadow-glow">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-800 text-zinc-100">
+                <SparkIcon />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold tracking-wide text-zinc-100">Codebot</p>
+                <p className="truncate text-xs text-zinc-400">Streaming AI assistant</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-semibold tracking-wide text-zinc-100">Codebot</p>
-              <p className="text-xs text-zinc-400">Streaming AI assistant</p>
-            </div>
+
+            <button
+              aria-label="Close sidebar"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-zinc-900 text-zinc-200 transition hover:bg-zinc-800"
+              onClick={() => setIsSidebarOpen(false)}
+              type="button"
+            >
+              <SidebarToggleIcon />
+            </button>
           </div>
 
           <button
@@ -1119,15 +1591,13 @@ function App() {
             <span>{threads.length}</span>
           </div>
 
-          <div className="flex-1 space-y-2 overflow-y-auto pr-1">
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
             {filteredThreads.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-white/10 bg-zinc-950 p-4 text-sm text-zinc-400">
-                No chats yet. Start a conversation to populate the sidebar.
+                {isBootstrapping ? "Preparing secure chat session..." : "No chats yet. Start a conversation to populate the sidebar."}
               </div>
             ) : (
               filteredThreads.map((thread) => {
-                const lastMessage = thread.messages[thread.messages.length - 1]?.content || "No messages yet";
-
                 return (
                   <button
                     className={`group w-full rounded-2xl border px-3 py-3 text-left transition ${
@@ -1136,29 +1606,10 @@ function App() {
                         : "border-white/5 bg-zinc-950 hover:border-white/10 hover:bg-zinc-900"
                     }`}
                     key={thread.id}
-                    onClick={() => setActiveThreadId(thread.id)}
+                    onClick={() => handleThreadSelect(thread.id)}
                     type="button"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-zinc-100">{thread.title}</p>
-                        <p className="mt-1 line-clamp-2 text-xs text-zinc-400">{lastMessage}</p>
-                      </div>
-                      <span className="text-[11px] text-zinc-500">{formatRelativeTime(thread.updatedAt)}</span>
-                    </div>
-                    <div className="mt-3 flex items-center justify-between text-[11px] text-zinc-500">
-                      <span>{thread.messages.length} messages</span>
-                      <button
-                        className="opacity-0 transition group-hover:opacity-100"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          deleteThread(thread.id);
-                        }}
-                        type="button"
-                      >
-                        Delete
-                      </button>
-                    </div>
+                    <p className="truncate text-sm font-medium text-zinc-100">{thread.title}</p>
                   </button>
                 );
               })
@@ -1167,14 +1618,52 @@ function App() {
 
           <div className="mt-4 rounded-2xl border border-white/10 bg-zinc-900 p-4">
             <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Session</p>
-            <p className="mt-2 text-sm font-medium text-zinc-100">User ID {userId ?? "..."}</p>
-            <p className="mt-1 text-xs text-zinc-400">Stored locally and sent to the backend on each prompt.</p>
+            <p className="mt-2 text-sm font-medium text-zinc-100">
+              {sessionUser ? `User ${sessionUser.id}` : isBootstrapping ? "Connecting..." : "Unavailable"}
+            </p>
+            <p className="mt-1 text-xs text-zinc-400">
+              {sessionUser ? `JWT session ${sessionUser.sessionLabel}` : "Backend-authenticated chat history."}
+            </p>
           </div>
         </div>
       </aside>
 
-      <main className="flex min-h-screen flex-1 flex-col">
-        <header className="sticky top-0 z-10 border-b border-white/10 bg-black/80 backdrop-blur">
+      {!isSidebarOpen ? (
+        <aside className="hidden h-full w-[72px] shrink-0 border-r border-white/10 bg-black/95 lg:flex lg:flex-col lg:items-center lg:px-3 lg:py-5">
+          <button
+            aria-label="Open sidebar"
+            className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-zinc-900 text-zinc-200 transition hover:bg-zinc-800"
+            onClick={() => setIsSidebarOpen(true)}
+            title="Open sidebar"
+            type="button"
+          >
+            <SidebarToggleIcon />
+          </button>
+
+          <button
+            aria-label="New chat"
+            className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-zinc-900 text-zinc-200 transition hover:bg-zinc-800"
+            onClick={startFreshChat}
+            title="New chat"
+            type="button"
+          >
+            <EditIcon />
+          </button>
+
+          <button
+            aria-label="Open search"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-zinc-900 text-zinc-200 transition hover:bg-zinc-800"
+            onClick={() => setIsSidebarOpen(true)}
+            title="Open search"
+            type="button"
+          >
+            <SearchIcon />
+          </button>
+        </aside>
+      ) : null}
+
+      <main className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+        <header className="shrink-0 border-b border-white/10 bg-black/80 backdrop-blur">
           <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
             <div>
               <p className="text-xs uppercase tracking-[0.26em] text-zinc-500">Codebot workspace</p>
@@ -1212,70 +1701,77 @@ function App() {
           </div>
         </header>
 
-        <div className="relative flex-1">
+        <div className="relative min-h-0 flex-1">
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.05),_transparent_22%),radial-gradient(circle_at_bottom_right,_rgba(255,255,255,0.04),_transparent_18%)]" />
 
-          <div className="relative mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 pb-40 pt-6 sm:px-6">
-            {activeThread?.messages.length ? (
-              <div className="space-y-8">
-                {activeThread.messages.map((message) => (
-                  <div
-                    className={`flex animate-rise ${message.role === "user" ? "justify-end" : "justify-start"}`}
-                    key={message.id}
-                  >
-                    {message.role === "user" ? (
-                      <section className="max-w-[70%] rounded-[28px] bg-zinc-800 px-5 py-3 text-right shadow-lg">
-                        <div className="message-content text-sm leading-7 text-zinc-100">
-                          {message.content}
-                        </div>
-                      </section>
-                    ) : (
-                      <section className="w-full max-w-3xl px-2 py-1">
-                        <AssistantMessageContent
-                          content={message.content}
-                          isStreaming={isStreaming && message.id === activeThread.messages[activeThread.messages.length - 1]?.id}
-                        />
-                      </section>
-                    )}
+          <div className="relative flex h-full min-h-0 flex-col">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              <div className="relative mx-auto flex w-full max-w-5xl flex-col px-4 py-6 sm:px-6">
+                {activeThread && !activeThread.messagesLoaded && isLoadingMessages ? (
+                  <section className="mx-auto mt-8 w-full max-w-3xl rounded-[32px] border border-white/10 bg-zinc-950 p-8 shadow-glow">
+                    <p className="text-sm text-zinc-400">Loading chat history...</p>
+                  </section>
+                ) : activeThread?.messages.length ? (
+                  <div className="space-y-8 pb-8">
+                    {activeThread.messages.map((message) => (
+                      <div
+                        className={`flex animate-rise ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                        key={message.id}
+                      >
+                        {message.role === "user" ? (
+                          <section className="max-w-[70%] rounded-[28px] bg-zinc-800 px-5 py-3 text-right shadow-lg">
+                            <div className="message-content text-sm leading-7 text-zinc-100">
+                              {message.content}
+                            </div>
+                          </section>
+                        ) : (
+                          <section className="w-full max-w-3xl px-2 py-1">
+                            <AssistantMessageContent
+                              content={message.content}
+                              isStreaming={isStreaming && message.id === activeThread.messages[activeThread.messages.length - 1]?.id}
+                            />
+                          </section>
+                        )}
+                      </div>
+                    ))}
+                    <div ref={messagesEndRef} />
                   </div>
-                ))}
-                <div ref={messagesEndRef} />
+                ) : (
+                  <section className="mx-auto mt-8 w-full max-w-3xl rounded-[32px] border border-white/10 bg-zinc-950 p-8 shadow-glow">
+                    <div className="mb-6 flex items-center gap-4">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-zinc-900 text-zinc-100">
+                        <SparkIcon />
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">Frontend ready</p>
+                        <h2 className="mt-2 text-3xl font-semibold text-zinc-50">Ask Codebot anything</h2>
+                      </div>
+                    </div>
+
+                    <p className="max-w-2xl text-sm leading-7 text-zinc-400">
+                      This UI now uses backend chat threads and JWT-authenticated history instead of relying on local-only
+                      sidebar state.
+                    </p>
+
+                    <div className="mt-8 grid gap-3 sm:grid-cols-2">
+                      {starterPrompts.map((prompt) => (
+                        <button
+                          className="rounded-2xl border border-white/10 bg-zinc-900 px-4 py-4 text-left text-sm text-zinc-200 transition hover:bg-zinc-800"
+                          key={prompt}
+                          onClick={() => void sendMessage(prompt)}
+                          type="button"
+                        >
+                          {prompt}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
               </div>
-            ) : (
-              <section className="mx-auto mt-8 w-full max-w-3xl rounded-[32px] border border-white/10 bg-zinc-950 p-8 shadow-glow">
-                <div className="mb-6 flex items-center gap-4">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-zinc-900 text-zinc-100">
-                    <SparkIcon />
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">Frontend ready</p>
-                    <h2 className="mt-2 text-3xl font-semibold text-zinc-50">Ask Codebot anything</h2>
-                  </div>
-                </div>
+            </div>
 
-                <p className="max-w-2xl text-sm leading-7 text-zinc-400">
-                  This UI streams the assistant response directly from your FastAPI endpoint and keeps lightweight
-                  local chat history in the sidebar, similar to ChatGPT.
-                </p>
-
-                <div className="mt-8 grid gap-3 sm:grid-cols-2">
-                  {starterPrompts.map((prompt) => (
-                    <button
-                      className="rounded-2xl border border-white/10 bg-zinc-900 px-4 py-4 text-left text-sm text-zinc-200 transition hover:bg-zinc-800"
-                      key={prompt}
-                      onClick={() => void sendMessage(prompt)}
-                      type="button"
-                    >
-                      {prompt}
-                    </button>
-                  ))}
-                </div>
-              </section>
-            )}
-          </div>
-
-          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-white/10 bg-black/90 px-4 py-4 backdrop-blur sm:px-6">
-            <div className="mx-auto w-full max-w-5xl">
+            <div className="shrink-0 border-t border-white/10 bg-black/90 px-4 py-4 backdrop-blur sm:px-6">
+              <div className="mx-auto w-full max-w-5xl">
               {showCodeContext ? (
                 <div className="mb-3 rounded-3xl border border-white/10 bg-zinc-950 p-4">
                   <div className="mb-2 flex items-center justify-between">
@@ -1322,7 +1818,7 @@ function App() {
                   ) : (
                     <button
                       className="h-12 shrink-0 rounded-2xl bg-white px-5 text-sm font-semibold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
-                      disabled={!input.trim()}
+                      disabled={!input.trim() || isBootstrapping || !authToken}
                       onClick={() => void sendMessage()}
                       type="button"
                     >
@@ -1335,13 +1831,14 @@ function App() {
                   <div className="flex flex-wrap items-center gap-3">
                     <span>Mode: {mode}</span>
                     <span>Streaming: {isStreaming ? "live" : "idle"}</span>
-                    <span>Endpoint: /api/chat</span>
+                    <span>Endpoint: /api/chat/stream</span>
                   </div>
                   <span>Enter to send, Shift+Enter for newline</span>
                 </div>
               </div>
 
-              {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
+                {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
+              </div>
             </div>
           </div>
         </div>
@@ -1408,6 +1905,15 @@ function CopyIcon() {
         strokeLinecap="round"
         strokeWidth="1.8"
       />
+    </svg>
+  );
+}
+
+function SidebarToggleIcon() {
+  return (
+    <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
+      <rect height="14" rx="2.5" stroke="currentColor" strokeWidth="1.8" width="16" x="4" y="5" />
+      <path d="M10 5V19" stroke="currentColor" strokeWidth="1.8" />
     </svg>
   );
 }

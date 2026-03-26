@@ -4,7 +4,7 @@ from langchain_core.messages import BaseMessage, SystemMessage
 import os
 import sys
 from dotenv import load_dotenv
-import time
+from enum import Enum
 
 # Resolve `openai_tool` import robustly so this module can be run
 # both as a package and as a standalone script during development.
@@ -24,11 +24,18 @@ except Exception:
         from openai_tool.openai_tools import get_current_weather
 
 load_dotenv()
+class llmModels(Enum):
+    GPT_4o_MINI = "gpt-4o-mini"
+    GPT_4o = "gpt-4o"
+    GPT_4_1 = "gpt-4.1"
+    GPT_5 = "gpt-5"
+    GPT_5_MINI = "gpt-5.4-mini"
+    GPT_5_NENO = "gpt-5.4-nano"
 
 class OpenAILLMService:
     def __init__(self):
         self.api_key = os.getenv("OPENAI_API_KEY")
-        self.model = "gpt-4o-mini"
+        self.model = llmModels.GPT_4o_MINI.value
         if self.api_key is None:
             raise ValueError("OPENAI_API_KEY is not found")
         # Store bound ChatOpenAI instance

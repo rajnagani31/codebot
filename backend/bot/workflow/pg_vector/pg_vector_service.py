@@ -54,7 +54,15 @@ class PGVectorService:
     # =========================
     # STORE
     # =========================
-    def store(self, user_id: int, text: str, type_: str):
+    def store(
+        self,
+        user_id: int,
+        text: str,
+        type_: str,
+        *,
+        metadata: dict | None = None,
+        user_session_id: str | None = None,
+    ):
         session = self.Session()
 
         try:
@@ -62,16 +70,21 @@ class PGVectorService:
 
             for chunk in chunks:
                 embedding = self.embedding.embed_query(chunk)
+                extra_metadata = {
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+
+                if metadata:
+                    extra_metadata.update(metadata)
 
                 row = VectorData(
                     id=str(uuid.uuid4()),
+                    user_session_id=user_session_id,
                     user_id=user_id,
                     content=chunk,
                     embedding=embedding,
                     type=type_,
-                    extra_metadata={
-                        "timestamp": datetime.utcnow().isoformat()
-                    }
+                    extra_metadata=extra_metadata,
                 )
 
                 session.add(row)

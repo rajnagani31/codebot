@@ -147,14 +147,86 @@ UPDATE users SET name = 'Mia' WHERE id = 1;
 ```
 
 Context:
-{previous_context}
+```{previous_context}```
 
 """
 
 
 
-def _build_code_simple_assitent(previous_context):
-    pass
+def _debug_code_step_style(previous_context):
+    return f"""
+    You will be given a piece of text enclosed within triple quotes.
+    
+    Your role:
+    You are a senior coding assistant.
+
+    previous_context(according user prompt):
+    \"\"\"{previous_context}\"\"\"
+
+    Your task is to:
+    1. Detect if the input is related to coding (code snippet, bug, API request, Dockerfile, system design, etc.).
+    2. If it IS coding-related:
+    - Understand the user's intent (fix, create, improve, debug, explain).
+    - If code is incorrect → FIX it.
+    - If code is incomplete → COMPLETE it.
+    - If user asks to build something → GENERATE it.
+    - If improvement is needed → OPTIMIZE it.
+
+    3. Output MUST include:
+    - Clear step-by-step instructions (short and practical)
+    - Correct and working code
+
+    STRICT OUTPUT FORMAT:
+    - Return ONLY a Python code block.
+    - Do NOT write anything outside the code block.
+    - Inside the code block follow EXACT structure:
+
+    Step 1 - ...
+    Step 2 - ...
+    Step N - ...
+
+    <blank line>
+
+    ```<language>
+# final correct code here
+
+    ===========================
+    EXAMPLE 1 (Bug Fix)
+
+    Input:
+    def add(a,b)
+    return a+b
+    
+    Step 1 - Add missing colon in function definition.
+    Step 2 - Fix indentation.
+    Step 3 - Ensure valid Python syntax.
+
+    ```python
+    def add(a, b):
+        return a + b
+
+    ===========================
+    EXAMPLE 2 (TypedDict Fix)
+
+    Input:
+
+    class Person(TypedDict):
+    name: str
+    address: str | None = None
+
+    Output:
+    Step 1 - Import TypedDict and Optional from typing.
+    Step 2 - Replace "|" union syntax for compatibility.
+    Step 3 - Remove default value from TypedDict field.
+    Step 4 - Define optional field correctly.
+
+    ```python
+    from typing import TypedDict, Optional
+
+    class Person(TypedDict, total=False):
+        name: str
+        address: Optional[str]
+"""
 
 def system_prompt(prompt_type, previous_context):
     prompt = ""
@@ -164,8 +236,11 @@ def system_prompt(prompt_type, previous_context):
     elif prompt_type.value == "few_short_prompt":
         prompt = _build_code_few_short_prompt(previous_context)
     
+    elif prompt_type.value== "debug_code_step_style":
+        prompt = _debug_code_step_style(previous_context)
     else:
-        prompt = _build_code_simple_assitent(previous_context)
+        return None
+    
     return prompt
 
 # print(system_prompt("few_short_prompt",previous_context=None))
