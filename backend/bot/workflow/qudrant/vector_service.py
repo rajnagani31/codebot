@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-class VectorService:
+class QdrantVectorService:
 
     def __init__(self):
         self.collection_name = os.getenv("QDRANT_COLLECTION_NAME", "codebot_data")

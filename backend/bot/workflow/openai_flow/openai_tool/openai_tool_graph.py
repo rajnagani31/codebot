@@ -7,7 +7,6 @@ from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from langchain_core.messages import HumanMessage, ToolMessage, AIMessage, BaseMessage
 from langchain_core.runnables import RunnableConfig
-from bot.workflow.qudrant.vector_service import VectorService
 from bot.workflow.openai_flow.system.system_helper import GetSytemInstruction
 
 # Use relative imports for modules in the same openai_tool package
