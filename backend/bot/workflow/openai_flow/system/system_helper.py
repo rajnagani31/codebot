@@ -11,7 +11,7 @@ class PrompteChoice(Enum):
 class GetSytemInstruction:
     def build_messages(self, messages: list[BaseMessage], previous_context: str = ""):
 
-        system_message = system_prompt(prompt_type = PrompteChoice.DEBUG_CODE_STEP, previous_context = previous_context or "")
+        system_message = system_prompt(prompt_type = PrompteChoice.FEW_SHORT_PROMPT, previous_context = previous_context or "")
         # print("system_message",system_message)
         # print('value',PrompteChoice.CODE_GENERATOR)
         full_messages = [

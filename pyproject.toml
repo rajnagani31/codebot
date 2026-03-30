@@ -5,6 +5,7 @@ description = "Nero CLI"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "alembic>=1.14.1",
     "dotenv>=0.9.9",
     "fastapi>=0.135.1",
     "langchain>=1.2.10",

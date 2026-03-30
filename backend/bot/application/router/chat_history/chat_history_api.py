@@ -7,7 +7,7 @@ from ...schema.chat_schema import CreateThreadRequest, MessageResponse, ThreadSu
 from ...service.chat_service import ChatService
 
 
-router = APIRouter()
+router = APIRouter(tags=["chat_history"])
 
 
 def get_chat_service() -> ChatService:
