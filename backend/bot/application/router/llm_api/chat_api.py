@@ -2,7 +2,7 @@ import asyncio
 import json
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 
 from ...config import SessionLocal
 from ...dependencies.auth import get_auth_service, require_current_user
@@ -147,3 +147,17 @@ async def chat(
             yield encode_sse_event("message.failed", payload)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@router.post("/chat/stream/test")
+async def chat_test(
+    user: str,
+    current_user=Depends(require_current_user),
+):
+    return JSONResponse({
+        "user": user,
+        "current_user": {
+            "id": current_user.id,
+            "email": current_user.email,
+        },
+    })

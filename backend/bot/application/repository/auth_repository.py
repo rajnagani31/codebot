@@ -318,6 +318,7 @@ class AuthRepository:
         session = self.session_factory()
         try:
             user_session = session.get(UserSession, session_id)
+            print("Fetched user session for session_id", session_id, "session:", user_session.user_id)
             if user_session is None:
                 return None
             user = session.get(ChatUser, user_session.user_id)

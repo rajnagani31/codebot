@@ -220,6 +220,7 @@ class AuthService:
             raise AuthError("Token session missing")
 
         record = self.repository.get_session_user(session_id)
+        print("Session record fetched for session_id", session_id, "record:", record)
         if record is None:
             raise AuthError("Session not found")
 
@@ -486,6 +487,7 @@ class AuthService:
     def _extract_access_token(self, request: Request) -> str | None:
         cookie_token = request.cookies.get(ACCESS_COOKIE_NAME) or request.cookies.get("guest_token")
         if cookie_token:
+            print("Access token found in cookies", cookie_token)
             return cookie_token
 
         auth_header = request.headers.get("Authorization", "")

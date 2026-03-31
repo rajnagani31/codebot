@@ -97,7 +97,6 @@ class OpenAIToolGraph:
         """Stream tokens while preserving tool calls"""
 
         accumulated = None
-        print('previous_context',previous_context)
         
         # ✅ Inject context into system prompt
         full_message = GetSytemInstruction().build_messages(
