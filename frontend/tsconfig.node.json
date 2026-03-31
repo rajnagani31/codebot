@@ -5,7 +5,7 @@
     "moduleResolution": "Bundler",
     "allowSyntheticDefaultImports": true,
     "types": ["node"],
-    "lib": ["ES2020", "DOM", "WebWorker"]
+    "lib": ["ES2020", "WebWorker"]
   },
   "include": ["vite.config.ts"]
 }

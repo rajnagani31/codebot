@@ -5,14 +5,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
 from ...config import SessionLocal
-from ...dependencies.auth import require_current_user
+from ...dependencies.auth import get_auth_service, require_current_user
 from ...repository.chat_repository import ChatRepository
 from ...schema.chat_schema import ChatStreamRequest
+from ...service.auth_service import AuthService, QuotaExceededError
 from ...service.chat_service import ChatService
 from ....workflow.openai_flow.openai_tool.openai_tool_graph import OpenAIToolGraph
 
 
-router = APIRouter()
+router = APIRouter(tags=["chat_bot"])
 
 
 def get_chat_service() -> ChatService:
@@ -28,8 +29,10 @@ async def chat(
     request: ChatStreamRequest,
     current_user=Depends(require_current_user),
     chat_service: ChatService = Depends(get_chat_service),
+    auth_service: AuthService = Depends(get_auth_service),
 ):
     try:
+        current_user = auth_service.consume_chat_credit(current_user)
         graph = OpenAIToolGraph()
         context = chat_service.prepare_stream(
             user_id=current_user.id,
@@ -40,6 +43,8 @@ async def chat(
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except QuotaExceededError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Setup error: {exc}") from exc
 

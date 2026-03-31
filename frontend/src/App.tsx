@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 type ChatMode = "chat" | "code" | "debug" | "review";
+type ThemeName = "normal" | "black" | "white";
 type MessageStatus = "pending" | "streaming" | "completed" | "failed" | "stopped";
 
 type Message = {
@@ -24,14 +25,49 @@ type Thread = {
 
 type SessionUser = {
   id: number;
+  publicId: string;
   sessionLabel: string;
+  email: string | null;
+  displayName: string | null;
+  userType: "guest" | "registered";
+  authProvider: string;
+  emailVerified: boolean;
+  sessionId: string;
+  sessionExpiresAt: string;
+  guestMessageLimit: number | null;
+  guestMessagesUsed: number;
+  remainingGuestMessages: number | null;
 };
 
 type AuthSessionResponse = {
+  access_token: string;
   token: string;
   user_id: number;
   session_label: string;
+  session_id: string;
   expires_at: number;
+  refresh_expires_at: number;
+  user: {
+    id: number;
+    public_id: string;
+    session_label: string;
+    email: string | null;
+    display_name: string | null;
+    user_type: "guest" | "registered";
+    auth_provider: string;
+    email_verified: boolean;
+    session_id: string;
+    session_expires_at: string;
+    guest_message_limit: number | null;
+    guest_messages_used: number;
+    remaining_guest_messages: number | null;
+  };
+};
+
+type GoogleLoginUrlResponse = {
+  enabled: boolean;
+  login_url: string | null;
+  detail: string | null;
 };
 
 type ThreadSummaryResponse = {
@@ -103,8 +139,31 @@ type StructuredAnswer = {
 };
 
 const ACTIVE_THREAD_STORAGE_KEY = "codebot_active_thread";
-const AUTH_TOKEN_STORAGE_KEY = "codebot_auth_token";
 const CLIENT_SESSION_STORAGE_KEY = "codebot_client_session_id";
+const THEME_STORAGE_KEY = "codebot_theme";
+const ACCESS_TOKEN_STORAGE_KEY = "codebot_access_token";
+
+const themeOptions: Array<{
+  value: ThemeName;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "normal",
+    label: "Normal",
+    description: "Soft charcoal workspace",
+  },
+  {
+    value: "black",
+    label: "Black",
+    description: "Pure black high contrast",
+  },
+  {
+    value: "white",
+    label: "White",
+    description: "Bright light canvas",
+  },
+];
 
 const starterPrompts = [
   "Review this function and suggest optimizations",
@@ -115,18 +174,6 @@ const starterPrompts = [
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
-}
-
-function getStoredAuthToken() {
-  return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
-}
-
-function storeAuthToken(token: string) {
-  window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
-}
-
-function clearStoredAuthToken() {
-  window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
 }
 
 function getClientSessionId() {
@@ -141,6 +188,40 @@ function getClientSessionId() {
   return generated;
 }
 
+function getInitialTheme(): ThemeName {
+  if (typeof window === "undefined") {
+    return "normal";
+  }
+
+  const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
+  if (saved === "normal" || saved === "black" || saved === "white") {
+    return saved;
+  }
+
+  return "normal";
+}
+
+function getStoredAccessToken() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  return window.localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY) || "";
+}
+
+function storeAccessToken(token: string | null) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (!token) {
+    window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+    return;
+  }
+
+  window.localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
+}
+
 function formatRelativeTime(value: string) {
   const date = new Date(value);
   return new Intl.DateTimeFormat("en", {
@@ -149,6 +230,24 @@ function formatRelativeTime(value: string) {
     hour: "numeric",
     minute: "2-digit",
   }).format(date);
+}
+
+function mapSessionUser(user: AuthSessionResponse["user"]): SessionUser {
+  return {
+    id: user.id,
+    publicId: user.public_id,
+    sessionLabel: user.session_label,
+    email: user.email,
+    displayName: user.display_name,
+    userType: user.user_type,
+    authProvider: user.auth_provider,
+    emailVerified: user.email_verified,
+    sessionId: user.session_id,
+    sessionExpiresAt: user.session_expires_at,
+    guestMessageLimit: user.guest_message_limit,
+    guestMessagesUsed: user.guest_messages_used,
+    remainingGuestMessages: user.remaining_guest_messages,
+  };
 }
 
 function createMessage(
@@ -390,7 +489,7 @@ function renderInlineContent(content: string) {
       );
     } else if (token.startsWith("**")) {
       nodes.push(
-        <strong key={`strong-${tokenIndex}`} className="font-semibold text-zinc-50">
+        <strong key={`strong-${tokenIndex}`} className="font-semibold text-[var(--text-primary)]">
           {token.slice(2, -2)}
         </strong>,
       );
@@ -400,7 +499,7 @@ function renderInlineContent(content: string) {
       if (linkMatch) {
         nodes.push(
           <a
-            className="text-amber-200 underline decoration-amber-200/50 underline-offset-4 transition hover:text-amber-100"
+            className="text-[var(--accent-link)] underline decoration-[color:var(--accent-link-decoration)] underline-offset-4 transition hover:opacity-80"
             href={linkMatch[2]}
             key={`link-${tokenIndex}`}
             rel="noreferrer"
@@ -982,10 +1081,17 @@ function App() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  const [authToken, setAuthToken] = useState<string | null>(null);
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
+  const [authView, setAuthView] = useState<"login" | "signup">("signup");
+  const [authName, setAuthName] = useState("");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
+  const [theme, setTheme] = useState<ThemeName>(getInitialTheme);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     if (typeof window === "undefined") {
       return true;
@@ -995,6 +1101,7 @@ function App() {
   });
 
   const abortRef = useRef<AbortController | null>(null);
+  const bootstrapStartedRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -1002,12 +1109,23 @@ function App() {
     return threads.find((thread) => thread.id === activeThreadId) ?? null;
   }, [threads, activeThreadId]);
 
-  const loadThreadsFromApi = async (token: string, preferredThreadId?: string | null) => {
-    const response = await fetch("/api/threads", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+  const isGuestSession = !sessionUser || sessionUser.userType === "guest";
+
+  const openAuthDialog = (view: "login" | "signup") => {
+    setError("");
+    setAuthView(view);
+    setIsAuthDialogOpen(true);
+  };
+
+  const authFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    return fetch(input, {
+      ...init,
+      credentials: "include",
     });
+  };
+
+  const loadThreadsFromApi = async (preferredThreadId?: string | null) => {
+    const response = await authFetch("/api/threads");
 
     if (!response.ok) {
       throw new Error(await readErrorMessage(response));
@@ -1026,21 +1144,15 @@ function App() {
     });
   };
 
-  const loadMessagesForThread = async (threadId: string, tokenOverride?: string | null) => {
-    const resolvedToken = tokenOverride ?? authToken;
-
-    if (!resolvedToken) {
+  const loadMessagesForThread = async (threadId: string) => {
+    if (!sessionUser) {
       return;
     }
 
     setIsLoadingMessages(true);
 
     try {
-      const response = await fetch(`/api/threads/${threadId}/messages`, {
-        headers: {
-          Authorization: `Bearer ${resolvedToken}`,
-        },
-      });
+      const response = await authFetch(`/api/threads/${threadId}/messages`);
 
       if (!response.ok) {
         throw new Error(await readErrorMessage(response));
@@ -1074,55 +1186,101 @@ function App() {
     }
   };
 
+  const applyAuthenticatedSession = async (
+    session: AuthSessionResponse,
+    options?: {
+      preserveThreads?: boolean;
+      closeDialog?: boolean;
+    },
+  ) => {
+    storeAccessToken(session.access_token);
+    setSessionUser(mapSessionUser(session.user));
+
+    if (options?.closeDialog) {
+      setIsAuthDialogOpen(false);
+      setAuthPassword("");
+    }
+
+    if (!options?.preserveThreads) {
+      setThreads([]);
+      setActiveThreadId(null);
+      const preferredThreadId = window.localStorage.getItem(ACTIVE_THREAD_STORAGE_KEY);
+      await loadThreadsFromApi(preferredThreadId);
+      return;
+    }
+
+    const preferredThreadId = window.localStorage.getItem(ACTIVE_THREAD_STORAGE_KEY);
+    await loadThreadsFromApi(preferredThreadId);
+  };
+
+  const syncCurrentUser = async () => {
+    const response = await authFetch("/api/auth/me");
+
+    if (!response.ok) {
+      throw new Error(await readErrorMessage(response));
+    }
+
+    const user = (await response.json()) as AuthSessionResponse["user"];
+    setSessionUser(mapSessionUser(user));
+  };
+
+  const bootstrapSession = async () => {
+    let meResponse = await authFetch("/api/auth/me");
+
+    if (meResponse.status === 401) {
+      const refreshResponse = await authFetch("/api/auth/refresh", {
+        method: "POST",
+      });
+
+      if (refreshResponse.ok) {
+        const refreshedSession = (await refreshResponse.json()) as AuthSessionResponse;
+        storeAccessToken(refreshedSession.access_token);
+        setSessionUser(mapSessionUser(refreshedSession.user));
+        return;
+      }
+
+      storeAccessToken(null);
+      meResponse = await fetch("/api/auth/me", {
+        credentials: "include",
+      });
+    }
+
+    if (meResponse.ok) {
+      const user = (await meResponse.json()) as AuthSessionResponse["user"];
+      setSessionUser(mapSessionUser(user));
+      return;
+    }
+
+    const guestResponse = await authFetch("/api/auth/guest", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        client_session_id: getClientSessionId(),
+      }),
+    });
+
+    if (!guestResponse.ok) {
+      throw new Error(await readErrorMessage(guestResponse));
+    }
+
+    const session = (await guestResponse.json()) as AuthSessionResponse;
+    storeAccessToken(session.access_token);
+    setSessionUser(mapSessionUser(session.user));
+  };
+
   useEffect(() => {
+    if (bootstrapStartedRef.current) {
+      return;
+    }
+
+    bootstrapStartedRef.current = true;
     let cancelled = false;
 
-    const bootstrapSession = async () => {
+    const bootstrap = async () => {
       try {
-        const storedToken = getStoredAuthToken();
-
-        if (storedToken) {
-          const meResponse = await fetch("/api/auth/me", {
-            headers: {
-              Authorization: `Bearer ${storedToken}`,
-            },
-          });
-
-          if (meResponse.ok) {
-            const user = (await meResponse.json()) as { id: number; session_label: string };
-
-            if (!cancelled) {
-              setAuthToken(storedToken);
-              setSessionUser({
-                id: user.id,
-                sessionLabel: user.session_label,
-              });
-            }
-
-            return;
-          }
-
-          clearStoredAuthToken();
-        }
-
-        const guestResponse = await fetch("/api/auth/guest", {
-          method: "POST",
-        });
-
-        if (!guestResponse.ok) {
-          throw new Error(await readErrorMessage(guestResponse));
-        }
-
-        const session = (await guestResponse.json()) as AuthSessionResponse;
-
-        if (!cancelled) {
-          storeAuthToken(session.token);
-          setAuthToken(session.token);
-          setSessionUser({
-            id: session.user_id,
-            sessionLabel: session.session_label,
-          });
-        }
+        await bootstrapSession();
       } catch (bootstrapError) {
         if (!cancelled) {
           setError(bootstrapError instanceof Error ? bootstrapError.message : "Failed to create session.");
@@ -1134,7 +1292,7 @@ function App() {
       }
     };
 
-    void bootstrapSession();
+    void bootstrap();
 
     return () => {
       cancelled = true;
@@ -1142,16 +1300,35 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!authToken) {
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const authError = params.get("auth_error");
+    if (!authError) {
+      return;
+    }
+
+    setError(decodeURIComponent(authError));
+    params.delete("auth_error");
+    const nextQuery = params.toString();
+    const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}${window.location.hash}`;
+    window.history.replaceState({}, "", nextUrl);
+  }, []);
+
+  useEffect(() => {
+    if (!sessionUser) {
       return;
     }
 
     const preferredThreadId = window.localStorage.getItem(ACTIVE_THREAD_STORAGE_KEY);
 
-    void loadThreadsFromApi(authToken, preferredThreadId).catch((loadError) => {
+    void loadThreadsFromApi(preferredThreadId).catch((loadError) => {
       setError(loadError instanceof Error ? loadError.message : "Failed to load chats.");
     });
-  }, [authToken]);
+  }, [sessionUser]);
 
   useEffect(() => {
     if (!activeThreadId) {
@@ -1177,7 +1354,7 @@ function App() {
   }, [input]);
 
   useEffect(() => {
-    if (!authToken || !activeThreadId) {
+    if (!sessionUser || !activeThreadId) {
       return;
     }
 
@@ -1187,8 +1364,8 @@ function App() {
       return;
     }
 
-    void loadMessagesForThread(activeThreadId, authToken);
-  }, [authToken, activeThreadId, threads]);
+    void loadMessagesForThread(activeThreadId);
+  }, [sessionUser, activeThreadId, threads]);
 
   const filteredThreads = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -1207,14 +1384,13 @@ function App() {
   }, [threads, search]);
 
   const createThread = async (firstPrompt?: string) => {
-    if (!authToken) {
+    if (!sessionUser) {
       throw new Error("Session not ready.");
     }
 
-    const response = await fetch("/api/threads", {
+    const response = await authFetch("/api/threads", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${authToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -1292,7 +1468,7 @@ function App() {
   const sendMessage = async (presetPrompt?: string) => {
     const prompt = (presetPrompt ?? input).trim();
 
-    if (!prompt || isStreaming || !authToken) {
+    if (!prompt || isStreaming || !sessionUser) {
       return;
     }
 
@@ -1338,10 +1514,9 @@ function App() {
     let sseBuffer = "";
 
     try {
-      const response = await fetch("/api/chat/stream", {
+      const response = await authFetch("/api/chat/stream", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${authToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -1512,11 +1687,90 @@ function App() {
       setIsStreaming(false);
 
       try {
-        await loadThreadsFromApi(authToken, threadId);
-        await loadMessagesForThread(threadId, authToken);
+        await loadThreadsFromApi(threadId);
+        await loadMessagesForThread(threadId);
+        await syncCurrentUser();
       } catch (syncError) {
         setError(syncError instanceof Error ? syncError.message : "Failed to refresh chat history.");
       }
+    }
+  };
+
+  const submitAuthForm = async () => {
+    if (!authEmail.trim() || !authPassword.trim()) {
+      setError("Email and password are required.");
+      return;
+    }
+
+    setIsAuthSubmitting(true);
+    setError("");
+
+    try {
+      const response = await authFetch(authView === "signup" ? "/api/auth/signup" : "/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: authEmail,
+          password: authPassword,
+          display_name: authView === "signup" ? authName || null : null,
+          client_session_id: getClientSessionId(),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response));
+      }
+
+      const session = (await response.json()) as AuthSessionResponse;
+      await applyAuthenticatedSession(session, {
+        preserveThreads: authView === "signup" && sessionUser?.userType === "guest",
+        closeDialog: true,
+      });
+    } catch (authError) {
+      setError(authError instanceof Error ? authError.message : "Authentication failed.");
+    } finally {
+      setIsAuthSubmitting(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    setError("");
+
+    try {
+      await authFetch("/api/auth/logout", {
+        method: "POST",
+      });
+      storeAccessToken(null);
+      setSessionUser(null);
+      setThreads([]);
+      setActiveThreadId(null);
+      setIsSettingsOpen(false);
+      await bootstrapSession();
+    } catch (logoutError) {
+      setError(logoutError instanceof Error ? logoutError.message : "Logout failed.");
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setError("");
+
+    try {
+      const response = await authFetch("/api/auth/google/url");
+
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response));
+      }
+
+      const payload = (await response.json()) as GoogleLoginUrlResponse;
+      if (!payload.enabled || !payload.login_url) {
+        throw new Error(payload.detail || "Google login is not configured.");
+      }
+
+      window.location.assign(payload.login_url);
+    } catch (googleError) {
+      setError(googleError instanceof Error ? googleError.message : "Google login failed.");
     }
   };
 
@@ -1528,36 +1782,132 @@ function App() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-black text-zinc-100">
+    <div
+      className="app-shell flex h-screen overflow-hidden"
+      data-theme={theme}
+      style={{ colorScheme: theme === "white" ? "light" : "dark" }}
+    >
       {isSidebarOpen ? (
         <button
           aria-label="Close sidebar backdrop"
-          className="fixed inset-0 z-20 bg-black/55 lg:hidden"
+          className="fixed inset-0 z-20 bg-[color:var(--overlay)] lg:hidden"
           onClick={() => setIsSidebarOpen(false)}
           type="button"
         />
       ) : null}
 
+      {isAuthDialogOpen ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-[color:var(--overlay-strong)] px-4">
+          <div className="w-full max-w-md rounded-[28px] border border-[color:var(--border-subtle)] bg-[var(--surface-1)] p-6 text-[var(--text-primary)] shadow-glow">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.24em] text-[var(--text-faint)]">Authentication</p>
+                <h2 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">
+                  {authView === "signup" ? "Create your account" : "Login to your account"}
+                </h2>
+                <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                  {authView === "signup"
+                    ? "Guest chats stay on this account when you upgrade."
+                    : "Switch from guest mode to your saved account."}
+                </p>
+              </div>
+
+              <button
+                className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-0)] px-3 py-2 text-sm text-[var(--text-secondary)] transition hover:bg-[var(--surface-2)]"
+                onClick={() => {
+                  setError("");
+                  setIsAuthDialogOpen(false);
+                }}
+                type="button"
+              >
+                Close
+              </button>
+            </div>
+
+            {error ? (
+              <div className="mt-4 rounded-2xl border border-[color:var(--danger-border)] bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger-text)]">
+                {error}
+              </div>
+            ) : null}
+
+            <div className="mt-5 grid gap-3">
+              {authView === "signup" ? (
+                <input
+                  className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--surface-0)] px-4 py-3 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-faint)]"
+                  onChange={(event) => setAuthName(event.target.value)}
+                  placeholder="Display name"
+                  value={authName}
+                />
+              ) : null}
+              <input
+                className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--surface-0)] px-4 py-3 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-faint)]"
+                onChange={(event) => setAuthEmail(event.target.value)}
+                placeholder="Email address"
+                type="email"
+                value={authEmail}
+              />
+              <input
+                className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--surface-0)] px-4 py-3 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-faint)]"
+                onChange={(event) => setAuthPassword(event.target.value)}
+                placeholder="Password"
+                type="password"
+                value={authPassword}
+              />
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button
+                className="rounded-2xl bg-[var(--button-primary-bg)] px-4 py-3 text-sm font-semibold text-[var(--button-primary-text)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-[var(--surface-3)] disabled:text-[var(--text-faint)]"
+                disabled={isAuthSubmitting}
+                onClick={() => void submitAuthForm()}
+                type="button"
+              >
+                {isAuthSubmitting ? "Submitting..." : authView === "signup" ? "Sign up" : "Login"}
+              </button>
+              <button
+                className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] px-4 py-3 text-sm font-semibold text-[var(--text-primary)] transition hover:bg-[var(--surface-3)]"
+                disabled={isAuthSubmitting}
+                onClick={() => void handleGoogleLogin()}
+                type="button"
+              >
+                Continue with Google
+              </button>
+            </div>
+
+            <div className="mt-4 text-sm text-[var(--text-secondary)]">
+              {authView === "signup" ? "Already have an account?" : "Need a new account?"}{" "}
+              <button
+                className="text-[var(--text-primary)] underline underline-offset-4"
+                onClick={() => setAuthView((current) => (current === "signup" ? "login" : "signup"))}
+                type="button"
+              >
+                {authView === "signup" ? "Login" : "Create account"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <aside
         className={`${
           isSidebarOpen ? "flex" : "hidden"
-        } fixed inset-y-0 left-0 z-30 h-full w-[290px] shrink-0 border-r border-white/10 bg-black/95 lg:static lg:z-auto`}
+        } fixed inset-y-0 left-0 z-30 h-full w-[290px] shrink-0 border-r border-[color:var(--border-subtle)] bg-[var(--sidebar-bg)] lg:static lg:z-auto`}
       >
         <div className="flex h-full min-h-0 w-full flex-col px-4 py-5">
           <div className="mb-4 flex items-center gap-3">
-            <div className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-white/10 bg-zinc-900 px-4 py-3 shadow-glow">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-800 text-zinc-100">
+            <div className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] px-4 py-3 shadow-glow">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--surface-3)] text-[var(--text-primary)]">
                 <SparkIcon />
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold tracking-wide text-zinc-100">Codebot</p>
-                <p className="truncate text-xs text-zinc-400">Streaming AI assistant</p>
+                <p className="truncate text-sm font-semibold tracking-wide text-[var(--text-primary)]">Codebot</p>
+                <p className="truncate text-xs text-[var(--text-secondary)]">Streaming AI assistant</p>
               </div>
             </div>
 
             <button
               aria-label="Close sidebar"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-zinc-900 text-zinc-200 transition hover:bg-zinc-800"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] text-[var(--text-secondary)] transition hover:bg-[var(--surface-3)]"
               onClick={() => setIsSidebarOpen(false)}
               type="button"
             >
@@ -1566,7 +1916,7 @@ function App() {
           </div>
 
           <button
-            className="mb-4 flex items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200"
+            className="mb-4 flex items-center justify-center gap-2 rounded-2xl bg-[var(--button-primary-bg)] px-4 py-3 text-sm font-semibold text-[var(--button-primary-text)] transition hover:opacity-90"
             onClick={startFreshChat}
             type="button"
           >
@@ -1574,11 +1924,11 @@ function App() {
             New chat
           </button>
 
-          <div className="mb-4 rounded-2xl border border-white/10 bg-zinc-900 px-3 py-2">
-            <div className="flex items-center gap-2 text-zinc-500">
+          <div className="mb-4 rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] px-3 py-2">
+            <div className="flex items-center gap-2 text-[var(--text-faint)]">
               <SearchIcon />
               <input
-                className="w-full border-none bg-transparent text-sm text-zinc-100 outline-none placeholder:text-zinc-500"
+                className="w-full border-none bg-transparent text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-faint)]"
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search chats"
                 value={search}
@@ -1586,14 +1936,14 @@ function App() {
             </div>
           </div>
 
-          <div className="mb-3 flex items-center justify-between px-1 text-xs uppercase tracking-[0.2em] text-zinc-500">
+          <div className="mb-3 flex items-center justify-between px-1 text-xs uppercase tracking-[0.2em] text-[var(--text-faint)]">
             <span>Recent</span>
             <span>{threads.length}</span>
           </div>
 
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
             {filteredThreads.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-white/10 bg-zinc-950 p-4 text-sm text-zinc-400">
+              <div className="rounded-2xl border border-dashed border-[color:var(--border-subtle)] bg-[var(--surface-1)] p-4 text-sm text-[var(--text-secondary)]">
                 {isBootstrapping ? "Preparing secure chat session..." : "No chats yet. Start a conversation to populate the sidebar."}
               </div>
             ) : (
@@ -1602,37 +1952,164 @@ function App() {
                   <button
                     className={`group w-full rounded-2xl border px-3 py-3 text-left transition ${
                       thread.id === activeThreadId
-                        ? "border-white/20 bg-zinc-900"
-                        : "border-white/5 bg-zinc-950 hover:border-white/10 hover:bg-zinc-900"
+                        ? "border-[color:var(--border-strong)] bg-[var(--surface-2)]"
+                        : "border-[color:var(--border-soft)] bg-[var(--surface-1)] hover:border-[color:var(--border-subtle)] hover:bg-[var(--surface-2)]"
                     }`}
                     key={thread.id}
                     onClick={() => handleThreadSelect(thread.id)}
                     type="button"
                   >
-                    <p className="truncate text-sm font-medium text-zinc-100">{thread.title}</p>
+                    <p className="truncate text-sm font-medium text-[var(--text-primary)]">{thread.title}</p>
                   </button>
                 );
               })
             )}
           </div>
 
-          <div className="mt-4 rounded-2xl border border-white/10 bg-zinc-900 p-4">
-            <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Session</p>
-            <p className="mt-2 text-sm font-medium text-zinc-100">
-              {sessionUser ? `User ${sessionUser.id}` : isBootstrapping ? "Connecting..." : "Unavailable"}
+          <div className="mt-4 space-y-3">
+            <button
+              className="flex w-full items-center justify-between rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] px-4 py-3 text-left transition hover:bg-[var(--surface-3)]"
+              onClick={() => setIsSettingsOpen((current) => !current)}
+              type="button"
+            >
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-faint)]">Sidebar settings</p>
+                <p className="mt-1 text-sm font-medium text-[var(--text-primary)]">Theme and account</p>
+              </div>
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-1)] text-[var(--text-secondary)]">
+                <SettingsIcon />
+              </span>
+            </button>
+
+            {isSettingsOpen ? (
+              <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--surface-1)] p-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-faint)]">Theme</p>
+                  <div className="mt-3 grid gap-2">
+                    {themeOptions.map((option) => (
+                      <button
+                        className={`rounded-2xl border px-3 py-3 text-left transition ${
+                          theme === option.value
+                            ? "border-[color:var(--theme-ring)] bg-[var(--theme-active-bg)]"
+                            : "border-[color:var(--border-subtle)] bg-[var(--surface-2)] hover:bg-[var(--surface-3)]"
+                        }`}
+                        key={option.value}
+                        onClick={() => setTheme(option.value)}
+                        type="button"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-medium text-[var(--text-primary)]">{option.label}</p>
+                            <p className="mt-1 text-xs text-[var(--text-secondary)]">{option.description}</p>
+                          </div>
+                          <span
+                            aria-hidden="true"
+                            className="h-4 w-4 rounded-full border border-[color:var(--border-subtle)]"
+                            style={{ background: `var(--theme-preview-${option.value})` }}
+                          />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-5">
+                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-faint)]">Account</p>
+                  <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                    {isGuestSession
+                      ? "Create an account or log in to keep your chats outside the guest session."
+                      : "You are signed in. Logout returns the app to a guest session."}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {isGuestSession ? (
+                      <>
+                        <button
+                          className="rounded-xl bg-[var(--button-primary-bg)] px-3 py-2 text-xs font-semibold text-[var(--button-primary-text)] transition hover:opacity-90"
+                          onClick={() => openAuthDialog("signup")}
+                          type="button"
+                        >
+                          Sign up
+                        </button>
+                        <button
+                          className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] px-3 py-2 text-xs font-semibold text-[var(--text-primary)] transition hover:bg-[var(--surface-3)]"
+                          onClick={() => openAuthDialog("login")}
+                          type="button"
+                        >
+                          Login
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] px-3 py-2 text-xs font-semibold text-[var(--text-primary)] transition hover:bg-[var(--surface-3)]"
+                        onClick={() => void handleLogout()}
+                        type="button"
+                      >
+                        Logout
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] p-4">
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-faint)]">Session</p>
+            <p className="mt-2 text-sm font-medium text-[var(--text-primary)]">
+              {sessionUser
+                ? sessionUser.displayName || sessionUser.email || `User ${sessionUser.id}`
+                : isBootstrapping
+                  ? "Connecting..."
+                  : "Unavailable"}
             </p>
-            <p className="mt-1 text-xs text-zinc-400">
-              {sessionUser ? `JWT session ${sessionUser.sessionLabel}` : "Backend-authenticated chat history."}
+            <p className="mt-1 text-xs text-[var(--text-secondary)]">
+              {sessionUser
+                ? `${sessionUser.userType} via ${sessionUser.authProvider} • session ${sessionUser.sessionLabel}`
+                : "Database-backed authenticated chat history."}
             </p>
+            {sessionUser?.userType === "guest" && sessionUser.remainingGuestMessages !== null ? (
+              <p className="mt-2 text-xs text-[var(--accent-text)]">
+                Free guest messages left: {sessionUser.remainingGuestMessages}
+              </p>
+            ) : null}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {isGuestSession ? (
+                <>
+                  <button
+                    className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-0)] px-3 py-2 text-xs font-medium text-[var(--text-primary)] transition hover:bg-[var(--surface-3)]"
+                    onClick={() => openAuthDialog("signup")}
+                    type="button"
+                  >
+                    Create account
+                  </button>
+                  <button
+                    className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-0)] px-3 py-2 text-xs font-medium text-[var(--text-primary)] transition hover:bg-[var(--surface-3)]"
+                    onClick={() => openAuthDialog("login")}
+                    type="button"
+                  >
+                    Login
+                  </button>
+                </>
+              ) : null}
+              {sessionUser && !isGuestSession ? (
+                <button
+                  className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-0)] px-3 py-2 text-xs font-medium text-[var(--text-primary)] transition hover:bg-[var(--surface-3)]"
+                  onClick={() => void handleLogout()}
+                  type="button"
+                >
+                  Logout
+                </button>
+              ) : null}
+            </div>
+          </div>
           </div>
         </div>
       </aside>
 
       {!isSidebarOpen ? (
-        <aside className="hidden h-full w-[72px] shrink-0 border-r border-white/10 bg-black/95 lg:flex lg:flex-col lg:items-center lg:px-3 lg:py-5">
+        <aside className="hidden h-full w-[72px] shrink-0 border-r border-[color:var(--border-subtle)] bg-[var(--sidebar-bg)] lg:flex lg:flex-col lg:items-center lg:px-3 lg:py-5">
           <button
             aria-label="Open sidebar"
-            className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-zinc-900 text-zinc-200 transition hover:bg-zinc-800"
+            className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] text-[var(--text-secondary)] transition hover:bg-[var(--surface-3)]"
             onClick={() => setIsSidebarOpen(true)}
             title="Open sidebar"
             type="button"
@@ -1642,7 +2119,7 @@ function App() {
 
           <button
             aria-label="New chat"
-            className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-zinc-900 text-zinc-200 transition hover:bg-zinc-800"
+            className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] text-[var(--text-secondary)] transition hover:bg-[var(--surface-3)]"
             onClick={startFreshChat}
             title="New chat"
             type="button"
@@ -1652,35 +2129,75 @@ function App() {
 
           <button
             aria-label="Open search"
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-zinc-900 text-zinc-200 transition hover:bg-zinc-800"
+            className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] text-[var(--text-secondary)] transition hover:bg-[var(--surface-3)]"
             onClick={() => setIsSidebarOpen(true)}
             title="Open search"
             type="button"
           >
             <SearchIcon />
           </button>
+
+          <button
+            aria-label="Open settings"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] text-[var(--text-secondary)] transition hover:bg-[var(--surface-3)]"
+            onClick={() => {
+              setIsSidebarOpen(true);
+              setIsSettingsOpen(true);
+            }}
+            title="Open settings"
+            type="button"
+          >
+            <SettingsIcon />
+          </button>
         </aside>
       ) : null}
 
       <main className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
-        <header className="shrink-0 border-b border-white/10 bg-black/80 backdrop-blur">
+        <header className="shrink-0 border-b border-[color:var(--border-subtle)] bg-[var(--header-bg)] backdrop-blur">
           <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
             <div>
-              <p className="text-xs uppercase tracking-[0.26em] text-zinc-500">Codebot workspace</p>
-              <h1 className="mt-1 text-lg font-semibold text-zinc-50">Chat interface</h1>
+              <p className="text-xs uppercase tracking-[0.26em] text-[var(--text-faint)]">Codebot workspace</p>
+              <h1 className="mt-1 text-lg font-semibold text-[var(--text-primary)]">Chat interface</h1>
             </div>
 
             <div className="flex items-center gap-3">
               <button
-                className="rounded-xl border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 transition hover:bg-zinc-800 lg:hidden"
+                className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-secondary)] transition hover:bg-[var(--surface-3)] lg:hidden"
                 onClick={startFreshChat}
                 type="button"
               >
                 New chat
               </button>
 
+              {isGuestSession ? (
+                <>
+                  <button
+                    className="hidden rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] transition hover:bg-[var(--surface-3)] sm:inline-flex"
+                    onClick={() => openAuthDialog("login")}
+                    type="button"
+                  >
+                    Login
+                  </button>
+                  <button
+                    className="hidden rounded-xl bg-[var(--button-primary-bg)] px-3 py-2 text-sm font-semibold text-[var(--button-primary-text)] transition hover:opacity-90 sm:inline-flex"
+                    onClick={() => openAuthDialog("signup")}
+                    type="button"
+                  >
+                    Sign up
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="hidden rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] transition hover:bg-[var(--surface-3)] sm:inline-flex"
+                  onClick={() => void handleLogout()}
+                  type="button"
+                >
+                  Logout
+                </button>
+              )}
+
               <select
-                className="rounded-xl border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none transition hover:bg-zinc-800"
+                className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none transition hover:bg-[var(--surface-3)]"
                 onChange={(event) => setMode(event.target.value as ChatMode)}
                 value={mode}
               >
@@ -1691,25 +2208,35 @@ function App() {
               </select>
 
               <button
-                className="rounded-xl border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 transition hover:bg-zinc-800"
+                className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-secondary)] transition hover:bg-[var(--surface-3)]"
                 onClick={() => setShowCodeContext((current) => !current)}
                 type="button"
               >
                 {showCodeContext ? "Hide code" : "Add code"}
               </button>
+
+              {sessionUser?.userType === "guest" ? (
+                <button
+                  className="rounded-xl border border-[color:var(--accent-border)] bg-[var(--accent-bg)] px-3 py-2 text-sm text-[var(--accent-text)] transition hover:opacity-90"
+                  onClick={() => openAuthDialog("signup")}
+                  type="button"
+                >
+                  Upgrade
+                </button>
+              ) : null}
             </div>
           </div>
         </header>
 
         <div className="relative min-h-0 flex-1">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.05),_transparent_22%),radial-gradient(circle_at_bottom_right,_rgba(255,255,255,0.04),_transparent_18%)]" />
+          <div className="pointer-events-none absolute inset-0 bg-[var(--workspace-overlay)]" />
 
           <div className="relative flex h-full min-h-0 flex-col">
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
               <div className="relative mx-auto flex w-full max-w-5xl flex-col px-4 py-6 sm:px-6">
                 {activeThread && !activeThread.messagesLoaded && isLoadingMessages ? (
-                  <section className="mx-auto mt-8 w-full max-w-3xl rounded-[32px] border border-white/10 bg-zinc-950 p-8 shadow-glow">
-                    <p className="text-sm text-zinc-400">Loading chat history...</p>
+                  <section className="mx-auto mt-8 w-full max-w-3xl rounded-[32px] border border-[color:var(--border-subtle)] bg-[var(--surface-1)] p-8 shadow-glow">
+                    <p className="text-sm text-[var(--text-secondary)]">Loading chat history...</p>
                   </section>
                 ) : activeThread?.messages.length ? (
                   <div className="space-y-8 pb-8">
@@ -1719,8 +2246,8 @@ function App() {
                         key={message.id}
                       >
                         {message.role === "user" ? (
-                          <section className="max-w-[70%] rounded-[28px] bg-zinc-800 px-5 py-3 text-right shadow-lg">
-                            <div className="message-content text-sm leading-7 text-zinc-100">
+                          <section className="max-w-[70%] rounded-[28px] bg-[var(--user-bubble-bg)] px-5 py-3 text-right shadow-lg">
+                            <div className="message-content text-sm leading-7 text-[var(--user-bubble-text)]">
                               {message.content}
                             </div>
                           </section>
@@ -1737,26 +2264,26 @@ function App() {
                     <div ref={messagesEndRef} />
                   </div>
                 ) : (
-                  <section className="mx-auto mt-8 w-full max-w-3xl rounded-[32px] border border-white/10 bg-zinc-950 p-8 shadow-glow">
+                  <section className="mx-auto mt-8 w-full max-w-3xl rounded-[32px] border border-[color:var(--border-subtle)] bg-[var(--surface-1)] p-8 shadow-glow">
                     <div className="mb-6 flex items-center gap-4">
-                      <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-zinc-900 text-zinc-100">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-[var(--surface-2)] text-[var(--text-primary)]">
                         <SparkIcon />
                       </div>
                       <div>
-                        <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">Frontend ready</p>
-                        <h2 className="mt-2 text-3xl font-semibold text-zinc-50">Ask Codebot anything</h2>
+                        <p className="text-xs uppercase tracking-[0.25em] text-[var(--text-faint)]">Frontend ready</p>
+                        <h2 className="mt-2 text-3xl font-semibold text-[var(--text-primary)]">Ask Codebot anything</h2>
                       </div>
                     </div>
 
-                    <p className="max-w-2xl text-sm leading-7 text-zinc-400">
-                      This UI now uses backend chat threads and JWT-authenticated history instead of relying on local-only
-                      sidebar state.
+                    <p className="max-w-2xl text-sm leading-7 text-[var(--text-secondary)]">
+                      This UI now uses database-backed sessions, guest upgrades, and account-linked chat history instead of
+                      local-only sidebar state.
                     </p>
 
                     <div className="mt-8 grid gap-3 sm:grid-cols-2">
                       {starterPrompts.map((prompt) => (
                         <button
-                          className="rounded-2xl border border-white/10 bg-zinc-900 px-4 py-4 text-left text-sm text-zinc-200 transition hover:bg-zinc-800"
+                          className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] px-4 py-4 text-left text-sm text-[var(--text-secondary)] transition hover:bg-[var(--surface-3)]"
                           key={prompt}
                           onClick={() => void sendMessage(prompt)}
                           type="button"
@@ -1770,16 +2297,16 @@ function App() {
               </div>
             </div>
 
-            <div className="shrink-0 border-t border-white/10 bg-black/90 px-4 py-4 backdrop-blur sm:px-6">
+            <div className="shrink-0 border-t border-[color:var(--border-subtle)] bg-[var(--header-bg)] px-4 py-4 backdrop-blur sm:px-6">
               <div className="mx-auto w-full max-w-5xl">
               {showCodeContext ? (
-                <div className="mb-3 rounded-3xl border border-white/10 bg-zinc-950 p-4">
+                <div className="mb-3 rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--surface-1)] p-4">
                   <div className="mb-2 flex items-center justify-between">
-                    <p className="text-sm font-medium text-zinc-100">Code context</p>
-                    <span className="text-xs text-zinc-500">Sent as `code` in the API request</span>
+                    <p className="text-sm font-medium text-[var(--text-primary)]">Code context</p>
+                    <span className="text-xs text-[var(--text-faint)]">Sent as `code` in the API request</span>
                   </div>
                   <textarea
-                    className="min-h-28 w-full resize-y rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-500"
+                    className="min-h-28 w-full resize-y rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--surface-0)] px-4 py-3 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-faint)]"
                     onChange={(event) => setCodeContext(event.target.value)}
                     placeholder="Paste code here if you want debug/review/code generation context."
                     value={codeContext}
@@ -1787,10 +2314,10 @@ function App() {
                 </div>
               ) : null}
 
-              <div className="rounded-[28px] border border-white/10 bg-zinc-950 p-3 shadow-glow">
+              <div className="rounded-[28px] border border-[color:var(--border-subtle)] bg-[var(--surface-1)] p-3 shadow-glow">
                 <div className="flex items-end gap-3">
                   <button
-                    className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-zinc-900 text-zinc-300 transition hover:bg-zinc-800 sm:flex"
+                    className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] text-[var(--text-secondary)] transition hover:bg-[var(--surface-3)] sm:flex"
                     onClick={() => setShowCodeContext((current) => !current)}
                     type="button"
                   >
@@ -1798,7 +2325,7 @@ function App() {
                   </button>
 
                   <textarea
-                    className="max-h-60 min-h-12 flex-1 resize-none border-none bg-transparent px-2 py-3 text-sm leading-6 text-zinc-100 outline-none placeholder:text-zinc-500"
+                    className="max-h-60 min-h-12 flex-1 resize-none border-none bg-transparent px-2 py-3 text-sm leading-6 text-[var(--text-primary)] outline-none placeholder:text-[var(--text-faint)]"
                     onChange={(event) => setInput(event.target.value)}
                     onKeyDown={handleComposerKeyDown}
                     placeholder="Message Codebot..."
@@ -1809,7 +2336,7 @@ function App() {
 
                   {isStreaming ? (
                     <button
-                      className="h-12 shrink-0 rounded-2xl border border-rose-400/20 bg-rose-950 px-4 text-sm font-semibold text-rose-100 transition hover:bg-rose-900"
+                      className="h-12 shrink-0 rounded-2xl border border-[color:var(--danger-border)] bg-[var(--danger-bg)] px-4 text-sm font-semibold text-[var(--danger-text)] transition hover:opacity-90"
                       onClick={stopStreaming}
                       type="button"
                     >
@@ -1817,8 +2344,8 @@ function App() {
                     </button>
                   ) : (
                     <button
-                      className="h-12 shrink-0 rounded-2xl bg-white px-5 text-sm font-semibold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
-                      disabled={!input.trim() || isBootstrapping || !authToken}
+                      className="h-12 shrink-0 rounded-2xl bg-[var(--button-primary-bg)] px-5 text-sm font-semibold text-[var(--button-primary-text)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-[var(--surface-3)] disabled:text-[var(--text-faint)]"
+                      disabled={!input.trim() || isBootstrapping || !sessionUser}
                       onClick={() => void sendMessage()}
                       type="button"
                     >
@@ -1827,7 +2354,7 @@ function App() {
                   )}
                 </div>
 
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 px-2 pt-3 text-xs text-zinc-500">
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-[color:var(--border-subtle)] px-2 pt-3 text-xs text-[var(--text-faint)]">
                   <div className="flex flex-wrap items-center gap-3">
                     <span>Mode: {mode}</span>
                     <span>Streaming: {isStreaming ? "live" : "idle"}</span>
@@ -1837,7 +2364,7 @@ function App() {
                 </div>
               </div>
 
-                {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
+                {error ? <p className="mt-3 text-sm text-[var(--danger-text)]">{error}</p> : null}
               </div>
             </div>
           </div>
@@ -1890,6 +2417,25 @@ function CodeIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
+function SettingsIcon() {
+  return (
+    <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
+      <path
+        d="M12 8.5A3.5 3.5 0 1 1 8.5 12A3.5 3.5 0 0 1 12 8.5Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M19.4 15A1 1 0 0 0 19.6 16.1L19.7 16.2A1.2 1.2 0 0 1 19.7 17.9L17.9 19.7A1.2 1.2 0 0 1 16.2 19.7L16.1 19.6A1 1 0 0 0 15 19.4A1 1 0 0 0 14.4 20.3V20.6A1.2 1.2 0 0 1 13.2 21.8H10.8A1.2 1.2 0 0 1 9.6 20.6V20.4A1 1 0 0 0 9 19.4A1 1 0 0 0 7.9 19.6L7.8 19.7A1.2 1.2 0 0 1 6.1 19.7L4.3 17.9A1.2 1.2 0 0 1 4.3 16.2L4.4 16.1A1 1 0 0 0 4.6 15A1 1 0 0 0 3.7 14.4H3.4A1.2 1.2 0 0 1 2.2 13.2V10.8A1.2 1.2 0 0 1 3.4 9.6H3.6A1 1 0 0 0 4.6 9A1 1 0 0 0 4.4 7.9L4.3 7.8A1.2 1.2 0 0 1 4.3 6.1L6.1 4.3A1.2 1.2 0 0 1 7.8 4.3L7.9 4.4A1 1 0 0 0 9 4.6A1 1 0 0 0 9.6 3.7V3.4A1.2 1.2 0 0 1 10.8 2.2H13.2A1.2 1.2 0 0 1 14.4 3.4V3.6A1 1 0 0 0 15 4.6A1 1 0 0 0 16.1 4.4L16.2 4.3A1.2 1.2 0 0 1 17.9 4.3L19.7 6.1A1.2 1.2 0 0 1 19.7 7.8L19.6 7.9A1 1 0 0 0 19.4 9A1 1 0 0 0 20.3 9.6H20.6A1.2 1.2 0 0 1 21.8 10.8V13.2A1.2 1.2 0 0 1 20.6 14.4H20.4A1 1 0 0 0 19.4 15Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.4"
       />
     </svg>
   );
