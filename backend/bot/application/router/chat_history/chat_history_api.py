@@ -70,6 +70,7 @@ def list_messages(
             status=message.status,
             created_at=message.created_at,
             completed_at=message.completed_at,
+            metadata_json=message.metadata_json,
         )
         for message in messages
     ]

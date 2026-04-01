@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 
 from bot.application.model.pg_vectore import Base
 from bot.application.model import chat_history  # noqa: F401
+from bot.application.model import web_search  # noqa: F401
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]

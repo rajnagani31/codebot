@@ -1,21 +1,22 @@
-from langchain_core.messages import BaseMessage
-from langchain_core.messages import SystemMessage
-from bot.workflow.openai_flow.system.system_prompt import system_prompt
-from enum import Enum
+from langchain_core.messages import BaseMessage, SystemMessage
 
-class PrompteChoice(Enum):
-    CODE_GENERATOR = "code_generator"
-    FEW_SHORT_PROMPT = "few_short_prompt"
-    DEBUG_CODE_STEP = "debug_code_step_style"
+from bot.workflow.openai_flow.system.system_prompt import build_system_prompt
+
 
 class GetSytemInstruction:
-    def build_messages(self, messages: list[BaseMessage], previous_context: str = ""):
-
-        system_message = system_prompt(prompt_type = PrompteChoice.FEW_SHORT_PROMPT, previous_context = previous_context or "")
-        # print("system_message",system_message)
-        # print('value',PrompteChoice.CODE_GENERATOR)
-        full_messages = [
-            SystemMessage(content=system_message),
-            *messages
-        ]
-        return full_messages
+    def build_messages(
+        self,
+        *,
+        messages: list[BaseMessage],
+        previous_context: str = "",
+        prompt_name: str = "chat",
+        web_enabled: bool = False,
+        web_preferred: bool = False,
+    ) -> list[BaseMessage]:
+        system_message = build_system_prompt(
+            prompt_name,
+            previous_context=previous_context or "",
+            web_enabled=web_enabled,
+            web_preferred=web_preferred,
+        )
+        return [SystemMessage(content=system_message), *messages]

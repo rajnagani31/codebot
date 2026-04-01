@@ -42,6 +42,8 @@ class ChatService:
         mode: str,
         code: str | None = None,
         model_name: str = "gpt-4o-mini",
+        user_metadata: dict | None = None,
+        assistant_metadata: dict | None = None,
     ) -> ChatStreamContext:
         thread = self.repository.get_thread(user_id=user_id, thread_id=thread_id)
         if thread is None:
@@ -55,6 +57,7 @@ class ChatService:
             content=query,
             status="completed",
             code_context=code,
+            metadata_json=user_metadata,
         )
         assistant_message = self.repository.create_message(
             thread_id=thread_id,
@@ -64,6 +67,7 @@ class ChatService:
             status="streaming",
             model_name=model_name,
             code_context=code,
+            metadata_json=assistant_metadata,
         )
 
         pg_vector_service = PGVectorService()
@@ -90,12 +94,14 @@ class ChatService:
         assistant_content: str,
         status: str,
         error_text: str | None = None,
+        metadata_json: dict | None = None,
     ):
         message = self.repository.finalize_message(
             message_id=assistant_message_id,
             content=assistant_content,
             status=status,
             error_text=error_text,
+            metadata_json=metadata_json,
         )
 
         if message is None:
