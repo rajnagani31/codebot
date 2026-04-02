@@ -1,214 +1,253 @@
-# openai_tool/openai_tool_graph.py
+import json
+from dataclasses import dataclass
+from typing import Any
 
-from typing import Annotated, TypedDict, Literal
-import asyncio
-import sys
-from langgraph.graph import StateGraph, END
-from langgraph.graph.message import add_messages
-from langchain_core.messages import HumanMessage, ToolMessage, AIMessage, BaseMessage
-from langchain_core.runnables import RunnableConfig
+from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
+
+from bot.application.schema.chat_schema import MessageMetadata, MessageProcessMetadata, ResolvedChoiceConfig
+from bot.application.service.web_search_service import WebSearchService
+from bot.workflow.openai_flow.openai_adapter.openai_llm_service import OpenAILLMService
+from bot.workflow.openai_flow.openai_tool.openai_tools import (
+    ToolCapabilities,
+    ToolExecutionContext,
+    build_tools,
+)
 from bot.workflow.openai_flow.system.system_helper import GetSytemInstruction
 
-# Use relative imports for modules in the same openai_tool package
-from .openai_tools import *  # Your @tool functions
-from bot.workflow.openai_flow.openai_adapter.openai_llm_service import OpenAILLMService
 
+@dataclass(slots=True)
+class GraphRunContext:
+    user_id: int
+    thread_id: str
+    assistant_message_id: str
 
-class State(TypedDict):
-    messages: Annotated[list, add_messages]
-    previous_context: str
 
 class OpenAIToolGraph:
-    """Encapsulates the tool-enabled LLM graph and provides streaming runs."""
-
-    def __init__(self):
-        # Bind tools to LLM first
-        self.tools = [
-            get_current_weather,
-            two_sum,
-            apply_command,
-            list_directory,
-            create_directory,
-            read_file,
-        ]
-
-        self.llm = OpenAILLMService().bind_tools(self.tools)
-
-        # Build graph
-        self.graph = StateGraph(State)
-        self.graph.add_node("agent_response", self.agent_response)
-        self.graph.add_node("tools", self.execute_tools)
-
-        # Edge
-        self.graph.set_entry_point("agent_response")
-        self.graph.add_conditional_edges(
-            "agent_response", self.should_continue,
-            {"tools": "tools", END: END},
-        )
-        self.graph.add_edge("tools", "agent_response")
-
-        # start compiantion
-        self.app = self.graph.compile()
-
-    async def agent_response(self, state: State, config: RunnableConfig | None = None):
-        """Agent: LLM decides which tools to call"""
-        print("🧠 Agent streaming response...")
-
-        messages = state["messages"]
-        previous_context = state.get("previous_context", "")
-        latest_message = str(messages[-1].content).strip()
-
-        # greeting shortcut
-        # if self._is_casual_message(latest_message):
-        #     return {"messages": [AIMessage(content=self._build_casual_reply(latest_message))]}
-
-        # STREAM the LLM response
-        response = await self.stream_llm(messages, previous_context, config=config)
-
-        # print("\nLLM final message:", response)
-
-        return {"messages": state["messages"] + [response]}
-
-    def execute_tools(self, state: State):
-        """Execute the tool calls from agent"""
-        print("🔧 3. Executing tools called by agent...")
-
-        last_message = state["messages"][-1]
-        if not isinstance(last_message, AIMessage) or not getattr(last_message, "tool_calls", None):
-            return state
-
-        tool_messages = self._execute_tool_calls(last_message)
-
-        return {"messages": state["messages"] + tool_messages}
-
-    def should_continue(self, state: State) -> Literal["tools", END]:  # type: ignore
-        last_message = state["messages"][-1]
-        print("🔍 2. Checking if agent called tools...")
-        if isinstance(last_message, AIMessage) and getattr(last_message, "tool_calls", None):
-            return "tools"
-        return END
-
-    async def stream_llm(
+    def __init__(
         self,
-        messages: list,
-        previous_context: str = "",
-        config: RunnableConfig | None = None,
-    ) -> AIMessage:
-        """Stream tokens while preserving tool calls"""
+        *,
+        resolved_choice: ResolvedChoiceConfig,
+        run_context: GraphRunContext,
+    ):
+        self.resolved_choice = resolved_choice
+        self.run_context = run_context
+        self.web_search_service = WebSearchService() if resolved_choice.web_enabled else None
+        self.tools = build_tools(
+            capabilities=ToolCapabilities(web_search_enabled=resolved_choice.web_enabled),
+            execution_context=ToolExecutionContext(web_search_service=self.web_search_service),
+        )
+        self.tool_map = {tool.name: tool for tool in self.tools}
+        self.llm = OpenAILLMService(model_name=resolved_choice.model_name).bind_tools(self.tools)
 
+    async def run_stream(
+        self,
+        *,
+        messages: list[BaseMessage],
+        previous_context: str = "",
+    ):
+        conversation = list(messages)
+        tools_used: list[str] = []
+        sources: list[dict[str, Any]] = []
+        citations: list[dict[str, Any]] = []
+        web_search_run_id: str | None = None
+
+        while True:
+            streamed_response: AIMessage | None = None
+            async for event in self._stream_llm_events(messages=conversation, previous_context=previous_context):
+                if event["type"] == "delta":
+                    yield event
+                    continue
+                streamed_response = event["response"]
+
+            if streamed_response is None:
+                raise RuntimeError("LLM did not produce a response")
+
+            conversation.append(streamed_response)
+            tool_calls = list(getattr(streamed_response, "tool_calls", []) or [])
+
+            if not tool_calls:
+                metadata = self._build_metadata(
+                    tools_used=tools_used,
+                    sources=sources,
+                    citations=citations,
+                    web_search_run_id=web_search_run_id,
+                )
+                yield {
+                    "type": "complete",
+                    "metadata": metadata,
+                }
+                return
+
+            for tool_call in tool_calls:
+                async for event in self._execute_tool_call_events(tool_call):
+                    if event["type"] == "progress":
+                        yield event
+                        continue
+
+                    tool_message = event["tool_message"]
+                    conversation.append(tool_message)
+                    tool_name = event["tool_name"]
+                    tools_used.append(tool_name)
+
+                    if event.get("sources"):
+                        sources = event["sources"]
+                        citations = [
+                            {"title": source["title"], "url": source["url"], "rank": source["rank"]}
+                            for source in sources
+                        ]
+                    if event.get("web_search_run_id"):
+                        web_search_run_id = event["web_search_run_id"]
+
+    async def _stream_llm_events(self, *, messages: list[BaseMessage], previous_context: str):
         accumulated = None
-        
-        # ✅ Inject context into system prompt
-        full_message = GetSytemInstruction().build_messages(
+        full_messages = GetSytemInstruction().build_messages(
             messages=messages,
-            previous_context=previous_context
+            previous_context=previous_context,
+            prompt_name=self.resolved_choice.prompt_name,
+            web_enabled=self.resolved_choice.web_enabled,
+            web_preferred=self.resolved_choice.web_preferred,
         )
 
-        async for chunk in self.llm._chat_model.astream(full_message, config=config):
+        async for chunk in self.llm._chat_model.astream(full_messages):
+            content = getattr(chunk, "content", "")
+            if isinstance(content, str) and content:
+                yield {"type": "delta", "delta": content}
 
-            if chunk.content:
-                sys.stdout.flush()
+            accumulated = chunk if accumulated is None else accumulated + chunk
 
-            if accumulated is None:
-                accumulated = chunk
-            else:
-                accumulated = accumulated + chunk
+        if accumulated is None:
+            accumulated = AIMessage(content="")
 
-        return accumulated
+        yield {"type": "response", "response": accumulated}
 
-    def _is_casual_message(self, content: str) -> bool:
-        normalized = " ".join(content.lower().split())
-        casual_messages = {
-            "hi",
-            "hello",
-            "hey",
-            "hi there",
-            "hello there",
-            "good morning",
-            "good afternoon",
-            "good evening",
-            "how are you",
-            "how are you?",
-            "how r u",
-            "what's up",
-            "whats up",
-            "who are you",
-            "thank you",
-            "thanks",
-            "ok",
-            "okay",
-        }
+    async def _execute_tool_call_events(self, tool_call: dict[str, Any]):
+        tool_name = str(tool_call["name"])
+        tool_args = tool_call.get("args", {})
+        try:
+            if tool_name == "web_search":
+                if self.web_search_service is None:
+                    raise RuntimeError("Web search is not enabled")
 
-        return normalized in casual_messages
-
-    def _build_casual_reply(self, content: str) -> str:
-        normalized = " ".join(content.lower().split())
-
-        if normalized in {"thank you", "thanks"}:
-            return "You're welcome. Tell me what you want to work on."
-
-        if normalized in {"who are you"}:
-            return "I’m Codebot. I can help with code, APIs, databases, and app issues."
-
-        if normalized in {"how are you", "how are you?", "how r u", "what's up", "whats up"}:
-            return "I’m ready to help. Tell me what you want to do."
-
-        return "Hello. What do you want help with?"
-
-    def _execute_tool_calls(self, message: AIMessage) -> list[ToolMessage]:
-        tool_messages = []
-
-        for tool_call in message.tool_calls:
-            tool_name = tool_call["name"]
-            tool_args = tool_call.get("args", {})
-
-            for tool in self.tools:
-                if tool.name != tool_name:
-                    continue
-
-                result = tool.invoke(tool_args)
-                tool_messages.append(
-                    ToolMessage(
-                        content=result,
-                        tool_call_id=tool_call.get("id"),
-                        name=tool_name,
-                    )
+                query = str(tool_args.get("query") or "")
+                yield {
+                    "type": "progress",
+                    "stage": "searching_web",
+                    "label": "Searching web...",
+                }
+                result = await self.web_search_service.search(
+                    query=query,
+                    user_id=self.run_context.user_id,
+                    thread_id=self.run_context.thread_id,
+                    message_id=self.run_context.assistant_message_id,
+                    max_results=3,
                 )
-                print(f"✅ Tool executed: {tool_name}({tool_args}) -> {result}")
-                break
+                yield {
+                    "type": "progress",
+                    "stage": "reading_sources",
+                    "label": "Reading sources...",
+                }
+                tool_message = ToolMessage(
+                    content=json.dumps(
+                        {
+                            "query": result["query"],
+                            "context": result["context_text"],
+                            "sources": result["sources"],
+                        },
+                        ensure_ascii=True,
+                    ),
+                    tool_call_id=tool_call.get("id"),
+                    name=tool_name,
+                )
+                yield {
+                    "type": "tool_result",
+                    "tool_name": tool_name,
+                    "tool_message": tool_message,
+                    "sources": result["sources"],
+                    "web_search_run_id": result["run_id"],
+                }
+                return
 
-        return tool_messages
+            if tool_name == "read_web_page":
+                if self.web_search_service is None:
+                    raise RuntimeError("Web reading is not enabled")
+                url = str(tool_args.get("url") or "")
+                yield {
+                    "type": "progress",
+                    "stage": "reading_sources",
+                    "label": "Reading sources...",
+                }
+                result = await self.web_search_service.read_web_page(url)
+                tool_message = ToolMessage(
+                    content=json.dumps(result, ensure_ascii=True),
+                    tool_call_id=tool_call.get("id"),
+                    name=tool_name,
+                )
+                yield {
+                    "type": "tool_result",
+                    "tool_name": tool_name,
+                    "tool_message": tool_message,
+                }
+                return
 
-    async def run_streaming(self, query):
-        """Interactive loop using LangGraph streaming"""
+            tool = self.tool_map.get(tool_name)
+            if tool is None:
+                raise KeyError(f"Unknown tool: {tool_name}")
 
-        # while True:
-        #     user_input = await asyncio.to_thread(input, "You: ")
+            result = await tool.ainvoke(tool_args)
+            content = result if isinstance(result, str) else json.dumps(result, ensure_ascii=True)
+            yield {
+                "type": "tool_result",
+                "tool_name": tool_name,
+                "tool_message": ToolMessage(
+                    content=content,
+                    tool_call_id=tool_call.get("id"),
+                    name=tool_name,
+                ),
+            }
+        except Exception as exc:
+            yield {
+                "type": "tool_result",
+                "tool_name": tool_name,
+                "tool_message": ToolMessage(
+                    content=json.dumps({"error": str(exc)}, ensure_ascii=True),
+                    tool_call_id=tool_call.get("id"),
+                    name=tool_name,
+                ),
+            }
 
-        # if query.lower() in ["exit", "quit"]:
-        #     print("Exiting...")
-        #     break
+    def _build_metadata(
+        self,
+        *,
+        tools_used: list[str],
+        sources: list[dict[str, Any]],
+        citations: list[dict[str, Any]],
+        web_search_run_id: str | None,
+    ) -> dict[str, Any]:
+        web_tools = {"web_search", "read_web_page"}
+        non_web_tools_used = [name for name in tools_used if name not in web_tools]
+        web_tools_used = [name for name in tools_used if name in web_tools]
 
-        inputs = {"messages": [HumanMessage(content=query)]}
+        if web_tools_used and non_web_tools_used:
+            execution_mode = "agent_with_web_search_flow"
+        elif web_tools_used:
+            execution_mode = "web_search_flow"
+        elif non_web_tools_used:
+            execution_mode = "langgraph_agent_flow"
+        else:
+            execution_mode = "llm_only_flow"
 
-        async for event in self.app.astream(inputs):
-
-            for node, output in event.items():
-
-                # Agent response node
-                if node == "agent_response":
-                    msg = output["messages"][-1]
-
-                    if isinstance(msg, AIMessage) and msg.content:
-                        print('ok',msg.content)
-
-                # Tool execution node
-                if node == "tools":
-                    print("⚙️ Tool executed")
-
-
-if __name__ == "__main__":
-    service = OpenAIToolGraph()
-    # Default to streaming interactive run
-    import asyncio
-    asyncio.run(service.run_streaming())
+        metadata = MessageMetadata(
+            process=MessageProcessMetadata(
+                choice_config=self.resolved_choice.choice_config.model_dump(),
+                resolved_choice_config=self.resolved_choice.model_dump(),
+                execution_mode=execution_mode,
+                tools_used=tools_used,
+                web_search_used=bool(web_tools_used),
+                model_name=self.resolved_choice.model_name,
+                prompt_name=self.resolved_choice.prompt_name,
+            ),
+            sources=sources,
+            citations=citations,
+            web_search_run_id=web_search_run_id,
+        )
+        return metadata.model_dump()

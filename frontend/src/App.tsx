@@ -3,6 +3,44 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNod
 type ChatMode = "chat" | "code" | "debug" | "review";
 type ThemeName = "normal" | "black" | "white";
 type MessageStatus = "pending" | "streaming" | "completed" | "failed" | "stopped";
+type ChoiceMode = "auto" | "manual";
+type SelectorMode = "auto" | "manual";
+type WebMode = "off" | "auto" | "on";
+type ModelName = "gpt-4o-mini" | "gpt-4o" | "gpt-5" | "gpt-5.4-mini";
+type PromptName = "chat" | "code" | "debug" | "review" | "web_research";
+type ModelSelection = "auto" | ModelName;
+type PromptSelection = "auto" | PromptName;
+
+type ChoiceConfig = {
+  mode: ChoiceMode;
+  model_mode: SelectorMode;
+  model_name: ModelName | null;
+  prompt_mode: SelectorMode;
+  prompt_name: PromptName | null;
+  web_mode: WebMode;
+};
+
+type SourceSummary = {
+  title: string;
+  url: string;
+  domain: string;
+  snippet: string;
+  summary: string;
+  rank: number;
+};
+
+type MessageMetadata = {
+  process?: {
+    execution_mode?: string | null;
+    model_name?: string | null;
+    prompt_name?: string | null;
+    web_search_used?: boolean;
+    tools_used?: string[];
+  } | null;
+  sources?: SourceSummary[];
+  citations?: Array<{ title?: string; url?: string; rank?: number }>;
+  web_search_run_id?: string | null;
+};
 
 type Message = {
   id: string;
@@ -10,6 +48,7 @@ type Message = {
   content: string;
   createdAt: string;
   status: MessageStatus;
+  metadata: MessageMetadata | null;
 };
 
 type Thread = {
@@ -87,6 +126,7 @@ type MessageResponse = {
   status: MessageStatus;
   created_at: string;
   completed_at: string | null;
+  metadata_json: MessageMetadata | null;
 };
 
 type ParsedStreamEvent = {
@@ -172,6 +212,56 @@ const starterPrompts = [
   "Explain this Python stack trace in simple steps",
 ];
 
+const manualModelOptions: Array<{ value: ModelSelection; label: string }> = [
+  { value: "auto", label: "Model: Auto" },
+  { value: "gpt-4o-mini", label: "gpt-4o-mini" },
+  { value: "gpt-4o", label: "gpt-4o" },
+  { value: "gpt-5", label: "gpt-5" },
+  { value: "gpt-5.4-mini", label: "gpt-5.4-mini" },
+];
+
+const manualPromptOptions: Array<{ value: PromptSelection; label: string }> = [
+  { value: "auto", label: "Prompt: Auto" },
+  { value: "chat", label: "Chat" },
+  { value: "code", label: "Code" },
+  { value: "debug", label: "Debug" },
+  { value: "review", label: "Review" },
+  { value: "web_research", label: "Research" },
+];
+
+const manualWebOptions: Array<{ value: WebMode; label: string }> = [
+  { value: "off", label: "Web Off" },
+  { value: "auto", label: "Web Auto" },
+  { value: "on", label: "Web On" },
+];
+
+function buildChoiceConfig(
+  choiceMode: ChoiceMode,
+  modelSelection: ModelSelection,
+  promptSelection: PromptSelection,
+  webMode: WebMode,
+): ChoiceConfig {
+  if (choiceMode === "auto") {
+    return {
+      mode: "auto",
+      model_mode: "auto",
+      model_name: null,
+      prompt_mode: "auto",
+      prompt_name: null,
+      web_mode: "auto",
+    };
+  }
+
+  return {
+    mode: "manual",
+    model_mode: modelSelection === "auto" ? "auto" : "manual",
+    model_name: modelSelection === "auto" ? null : modelSelection,
+    prompt_mode: promptSelection === "auto" ? "auto" : "manual",
+    prompt_name: promptSelection === "auto" ? null : promptSelection,
+    web_mode: webMode,
+  };
+}
+
 function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
@@ -250,10 +340,24 @@ function mapSessionUser(user: AuthSessionResponse["user"]): SessionUser {
   };
 }
 
+function normalizeMessageMetadata(value: unknown): MessageMetadata | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as MessageMetadata;
+  return {
+    process: candidate.process ?? null,
+    sources: Array.isArray(candidate.sources) ? candidate.sources : [],
+    citations: Array.isArray(candidate.citations) ? candidate.citations : [],
+    web_search_run_id: candidate.web_search_run_id ?? null,
+  };
+}
+
 function createMessage(
   role: Message["role"],
   content: string,
-  options?: Partial<Pick<Message, "id" | "createdAt" | "status">>,
+  options?: Partial<Pick<Message, "id" | "createdAt" | "status" | "metadata">>,
 ): Message {
   return {
     id: options?.id ?? uid(),
@@ -261,6 +365,7 @@ function createMessage(
     content,
     createdAt: options?.createdAt ?? new Date().toISOString(),
     status: options?.status ?? "completed",
+    metadata: options?.metadata ?? null,
   };
 }
 
@@ -284,6 +389,7 @@ function mapMessageResponse(message: MessageResponse): Message {
     content: message.content,
     createdAt: message.created_at,
     status: message.status,
+    metadata: normalizeMessageMetadata(message.metadata_json),
   };
 }
 
@@ -1071,14 +1177,63 @@ function CodeBlockContent({ content, language }: { content: string; language: st
   return <CodeSurface content={content} label="Code" language={language} />;
 }
 
+function SourceCards({ sources }: { sources: SourceSummary[] }) {
+  if (!sources.length) {
+    return null;
+  }
+
+  return (
+    <section className="source-card-stack">
+      {sources.map((source) => (
+        <a
+          className="source-card"
+          href={source.url}
+          key={`${source.rank}-${source.url}`}
+          rel="noreferrer"
+          target="_blank"
+        >
+          <div className="source-card-header">
+            <span className="source-card-rank">{String(source.rank).padStart(2, "0")}</span>
+            <span className="source-card-domain">{source.domain}</span>
+          </div>
+          <p className="source-card-title">{source.title}</p>
+          <p className="source-card-summary">{source.summary || source.snippet}</p>
+        </a>
+      ))}
+    </section>
+  );
+}
+
+function AssistantProgress({ label }: { label: string | null }) {
+  if (!label) {
+    return null;
+  }
+
+  return (
+    <div className="assistant-progress">
+      <span className="assistant-progress-dot" />
+      <span>{label}</span>
+    </div>
+  );
+}
+
 function App() {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<ChatMode>("chat");
+  const [choiceMode, setChoiceMode] = useState<ChoiceMode>("auto");
+  const [manualModelSelection, setManualModelSelection] = useState<ModelSelection>("auto");
+  const [manualPromptSelection, setManualPromptSelection] = useState<PromptSelection>("auto");
+  const [manualWebMode, setManualWebMode] = useState<WebMode>("auto");
   const [codeContext, setCodeContext] = useState("");
   const [showCodeContext, setShowCodeContext] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [streamProgress, setStreamProgress] = useState<{
+    assistantMessageId: string;
+    stage: string;
+    label: string;
+  } | null>(null);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
@@ -1474,8 +1629,10 @@ function App() {
 
     setError("");
     setInput("");
+    setStreamProgress(null);
 
     let threadId = activeThread?.id;
+    const choiceConfig = buildChoiceConfig(choiceMode, manualModelSelection, manualPromptSelection, manualWebMode);
 
     if (!threadId) {
       try {
@@ -1496,6 +1653,7 @@ function App() {
     const optimisticAssistantMessage = createMessage("assistant", "", {
       id: tempAssistantMessageId,
       status: "streaming",
+      metadata: null,
     });
 
     updateThreadMessages(
@@ -1524,6 +1682,7 @@ function App() {
           query: prompt,
           code: codeContext || null,
           mode,
+          choice_config: choiceConfig,
         }),
         signal: controller.signal,
       });
@@ -1558,6 +1717,7 @@ function App() {
                 id: string;
                 created_at: string;
                 status: MessageStatus;
+                metadata_json?: MessageMetadata | null;
               };
             };
 
@@ -1581,6 +1741,7 @@ function App() {
                     id: payload.assistant_message.id,
                     createdAt: payload.assistant_message.created_at,
                     status: payload.assistant_message.status,
+                    metadata: normalizeMessageMetadata(payload.assistant_message.metadata_json),
                   };
                 }
 
@@ -1611,13 +1772,50 @@ function App() {
             );
           }
 
+          if (event.event === "message.progress") {
+            const payload = event.data as {
+              assistant_message_id: string;
+              stage: string;
+              label: string;
+            };
+
+            setStreamProgress({
+              assistantMessageId: payload.assistant_message_id,
+              stage: payload.stage,
+              label: payload.label,
+            });
+          }
+
+          if (event.event === "message.sources") {
+            const payload = event.data as {
+              assistant_message_id: string;
+              metadata_json: MessageMetadata | null;
+            };
+
+            updateThreadMessages(threadId, (messages) =>
+              messages.map((message) =>
+                message.id === payload.assistant_message_id || message.id === tempAssistantMessageId
+                  ? {
+                      ...message,
+                      id: payload.assistant_message_id,
+                      metadata: normalizeMessageMetadata(payload.metadata_json),
+                    }
+                  : message,
+              ),
+            );
+          }
+
           if (event.event === "message.completed") {
             const payload = event.data as {
               assistant_message_id: string;
               content: string;
+              metadata_json?: MessageMetadata | null;
             };
 
             currentAssistantMessageId = payload.assistant_message_id;
+            setStreamProgress((current) =>
+              current?.assistantMessageId === payload.assistant_message_id ? null : current,
+            );
 
             updateThreadMessages(threadId, (messages) =>
               messages.map((message) =>
@@ -1627,6 +1825,7 @@ function App() {
                       id: currentAssistantMessageId,
                       content: payload.content ?? message.content,
                       status: "completed",
+                      metadata: normalizeMessageMetadata(payload.metadata_json),
                     }
                   : message,
               ),
@@ -1638,10 +1837,14 @@ function App() {
               assistant_message_id: string;
               content?: string;
               error?: string;
+              metadata_json?: MessageMetadata | null;
             };
 
             currentAssistantMessageId = payload.assistant_message_id;
             setError(payload.error || "Streaming failed.");
+            setStreamProgress((current) =>
+              current?.assistantMessageId === payload.assistant_message_id ? null : current,
+            );
 
             updateThreadMessages(threadId, (messages) =>
               messages.map((message) =>
@@ -1651,6 +1854,7 @@ function App() {
                       id: currentAssistantMessageId,
                       content: payload.content || message.content || payload.error || "Streaming failed.",
                       status: "failed",
+                      metadata: normalizeMessageMetadata(payload.metadata_json),
                     }
                   : message,
               ),
@@ -1667,6 +1871,9 @@ function App() {
           : "Unknown streaming error";
 
       setError(message);
+      setStreamProgress((current) =>
+        current?.assistantMessageId === currentAssistantMessageId ? null : current,
+      );
 
       updateThreadMessages(threadId, (messages) =>
         messages.map((entry) => {
@@ -1685,6 +1892,7 @@ function App() {
     } finally {
       abortRef.current = null;
       setIsStreaming(false);
+      setStreamProgress(null);
 
       try {
         await loadThreadsFromApi(threadId);
@@ -2257,6 +2465,10 @@ function App() {
                               content={message.content}
                               isStreaming={isStreaming && message.id === activeThread.messages[activeThread.messages.length - 1]?.id}
                             />
+                            <AssistantProgress
+                              label={streamProgress?.assistantMessageId === message.id ? streamProgress.label : null}
+                            />
+                            <SourceCards sources={message.metadata?.sources ?? []} />
                           </section>
                         )}
                       </div>
@@ -2315,6 +2527,69 @@ function App() {
               ) : null}
 
               <div className="rounded-[28px] border border-[color:var(--border-subtle)] bg-[var(--surface-1)] p-3 shadow-glow">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3 border-b border-[color:var(--border-subtle)] px-2 pb-3">
+                  <div className="choice-mode-toggle">
+                    <button
+                      className={`choice-mode-button ${choiceMode === "auto" ? "choice-mode-button-active" : ""}`}
+                      onClick={() => setChoiceMode("auto")}
+                      type="button"
+                    >
+                      Auto
+                    </button>
+                    <button
+                      className={`choice-mode-button ${choiceMode === "manual" ? "choice-mode-button-active" : ""}`}
+                      onClick={() => setChoiceMode("manual")}
+                      type="button"
+                    >
+                      Manual
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {choiceMode === "manual" ? (
+                      <>
+                        <select
+                          className="choice-select"
+                          onChange={(event) => setManualModelSelection(event.target.value as ModelSelection)}
+                          value={manualModelSelection}
+                        >
+                          {manualModelOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          className="choice-select"
+                          onChange={(event) => setManualPromptSelection(event.target.value as PromptSelection)}
+                          value={manualPromptSelection}
+                        >
+                          {manualPromptOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          className="choice-select"
+                          onChange={(event) => setManualWebMode(event.target.value as WebMode)}
+                          value={manualWebMode}
+                        >
+                          {manualWebOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </>
+                    ) : (
+                      <div className="choice-auto-summary">
+                        Backend picks model, prompt, and web search.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="flex items-end gap-3">
                   <button
                     className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] text-[var(--text-secondary)] transition hover:bg-[var(--surface-3)] sm:flex"
@@ -2357,6 +2632,8 @@ function App() {
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-[color:var(--border-subtle)] px-2 pt-3 text-xs text-[var(--text-faint)]">
                   <div className="flex flex-wrap items-center gap-3">
                     <span>Mode: {mode}</span>
+                    <span>Choice: {choiceMode}</span>
+                    <span>Web: {choiceMode === "manual" ? manualWebMode : "auto"}</span>
                     <span>Streaming: {isStreaming ? "live" : "idle"}</span>
                     <span>Endpoint: /api/chat/stream</span>
                   </div>

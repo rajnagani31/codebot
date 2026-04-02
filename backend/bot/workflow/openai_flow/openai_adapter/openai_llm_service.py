@@ -1,93 +1,31 @@
-# openai_adapter/openai_llm_service.py
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import BaseMessage, SystemMessage
 import os
-import sys
-from dotenv import load_dotenv
 from enum import Enum
 
-# Resolve `openai_tool` import robustly so this module can be run
-# both as a package and as a standalone script during development.
-try:
-    # Preferred when running as a package: nero.workflow.openai_flow.openai_adapter
-    from ..openai_tool.openai_tools import get_current_weather
-except Exception:
-    try:
-        # Absolute import when package root is on sys.path
-        from openai_tool.openai_tools import get_current_weather
-    except Exception:
-        # Fallback: ensure parent package dir is on sys.path then import
-        _here = os.path.dirname(__file__)
-        _pkg_root = os.path.abspath(os.path.join(_here, '..'))
-        if _pkg_root not in sys.path:
-            sys.path.insert(0, _pkg_root)
-        from openai_tool.openai_tools import get_current_weather
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
 
 load_dotenv()
-class llmModels(Enum):
-    GPT_4o_MINI = "gpt-4o-mini"
-    GPT_4o = "gpt-4o"
-    GPT_4_1 = "gpt-4.1"
+
+
+class LLMModels(Enum):
+    GPT_4O_MINI = "gpt-4o-mini"
+    GPT_4O = "gpt-4o"
     GPT_5 = "gpt-5"
     GPT_5_MINI = "gpt-5.4-mini"
     GPT_5_NENO = "gpt-5.4-nano"
 
 class OpenAILLMService:
-    def __init__(self):
+    def __init__(self, model_name: str = LLMModels.GPT_4O_MINI.value):
         self.api_key = os.getenv("OPENAI_API_KEY")
-        self.model = llmModels.GPT_4o_MINI.value
+        self.model_name = model_name
         if self.api_key is None:
             raise ValueError("OPENAI_API_KEY is not found")
-        # Store bound ChatOpenAI instance
         self._chat_model = None
 
-    def bind_tools(self, tools):
-        """Bind tools to the model (CRITICAL for tool calling)"""
-        self._chat_model = ChatOpenAI(
-            model=self.model,
+    def bind_tools(self, tools: list):
+        model = ChatOpenAI(
+            model=self.model_name,
             streaming=True,
-        ).bind_tools(tools)
-        print(self._chat_model)
-        return self  # Return self for chaining
-
-    def invoke(self, messages: list[BaseMessage]):
-        """LangGraph expects .invoke() method.
-
-        Ensures a valid `SystemMessage` is prepended. If `SYSTEM_PROMPT`
-        is already a `SystemMessage` instance it will be used directly;
-        otherwise it will be converted to a string and wrapped.
-        """
-        if not self._chat_model:
-            raise ValueError("Must call bind_tools() first")
-
-        # Build system message safely
-        if isinstance(SYSTEM_PROMPT, SystemMessage):
-            system_message = SYSTEM_PROMPT
-        else:
-            system_message = SystemMessage(content=str(SYSTEM_PROMPT))
-
-        # Ensure messages is a list
-        msgs = list(messages) if not isinstance(messages, list) else messages
-        # system_message = SystemMessage(content=str(SYSTEM_PROMPT))
-        # msgs = messages
-        print('mesg:-----------------------------------',[system_message] + f"```{msgs}```")
-        return self._chat_model.astream([system_message] + f"```{msgs}```")
-
-    def stream_invoke(self, messages: list[BaseMessage]):
-        """Attempt to stream responses from the underlying chat model.
-
-        Yields chunks (either BaseMessage instances or strings). Falls back
-        to single-shot `invoke` if streaming is not supported.
-        """
-        if not self._chat_model:
-            raise ValueError("Must call bind_tools() first")
-
-        stream_fn = getattr(self._chat_model, "stream_invoke", None)
-        if callable(stream_fn):
-            for chunk in stream_fn(messages):
-                yield chunk
-            return
-
-        # Fallback: single-shot invoke and yield the full response once
-        resp = self.invoke(messages)
-        yield resp
+        )
+        self._chat_model = model.bind_tools(tools) if tools else model
+        return self

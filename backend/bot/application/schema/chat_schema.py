@@ -1,11 +1,63 @@
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 ChatMode = Literal["chat", "code", "debug", "review"]
 UserType = Literal["guest", "registered"]
+ChoiceMode = Literal["auto", "manual"]
+SelectorMode = Literal["auto", "manual"]
+WebMode = Literal["off", "auto", "on"]
+PromptName = Literal["chat", "code", "debug", "review", "web_research"]
+ModelName = Literal["gpt-4o-mini", "gpt-4o", "gpt-5", "gpt-5.4-mini"]
+
+
+class ChoiceConfig(BaseModel):
+    mode: ChoiceMode = "auto"
+    model_mode: SelectorMode = "auto"
+    model_name: ModelName | None = None
+    prompt_mode: SelectorMode = "auto"
+    prompt_name: PromptName | None = None
+    web_mode: WebMode = "auto"
+
+
+class ResolvedChoiceConfig(BaseModel):
+    mode: ChoiceMode
+    model_mode: SelectorMode
+    model_name: ModelName
+    prompt_mode: SelectorMode
+    prompt_name: PromptName
+    web_mode: WebMode
+    web_enabled: bool
+    web_preferred: bool
+    choice_config: ChoiceConfig
+
+
+class SourceSummary(BaseModel):
+    title: str
+    url: str
+    domain: str
+    snippet: str = ""
+    summary: str = ""
+    rank: int = 0
+
+
+class MessageProcessMetadata(BaseModel):
+    choice_config: ChoiceConfig | None = None
+    resolved_choice_config: ResolvedChoiceConfig | None = None
+    execution_mode: str | None = None
+    tools_used: list[str] = Field(default_factory=list)
+    web_search_used: bool = False
+    model_name: str | None = None
+    prompt_name: str | None = None
+
+
+class MessageMetadata(BaseModel):
+    process: MessageProcessMetadata | None = None
+    sources: list[SourceSummary] = Field(default_factory=list)
+    citations: list[dict[str, Any]] = Field(default_factory=list)
+    web_search_run_id: str | None = None
 
 
 class AuthenticatedUserResponse(BaseModel):
@@ -85,6 +137,7 @@ class MessageResponse(BaseModel):
     status: str
     created_at: datetime
     completed_at: datetime | None = None
+    metadata_json: dict[str, Any] | None = None
 
 
 class ChatStreamRequest(BaseModel):
@@ -92,3 +145,5 @@ class ChatStreamRequest(BaseModel):
     query: str
     code: str | None = None
     mode: ChatMode = "chat"
+    use_web: bool | None = None
+    choice_config: ChoiceConfig | None = None
