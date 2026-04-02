@@ -130,7 +130,7 @@ class ChatRepository:
         finally:
             session.close()
 
-    def recent_messages(self, *, user_id: int, thread_id: str, limit: int = 12) -> list[ChatMessage]:
+    def recent_messages(self, *, user_id: int, thread_id: str, limit: int = 2) -> list[ChatMessage]:
         session = self.session_factory()
         try:
             stmt = (

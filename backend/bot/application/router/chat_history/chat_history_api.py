@@ -3,9 +3,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from ...config import SessionLocal
 from ...dependencies.auth import require_current_user
 from ...repository.chat_repository import ChatRepository
-from ...schema.chat_schema import CreateThreadRequest, MessageResponse, ThreadSummaryResponse
+from ...schema.chat_schema import (
+    CreateThreadRequest,
+    MessageResponse,
+    ThreadSummaryResponse,
+)
 from ...service.chat_service import ChatService
-
 
 router = APIRouter(tags=["chat_history"])
 
@@ -20,7 +23,7 @@ def create_thread(
     current_user=Depends(require_current_user),
     chat_service: ChatService = Depends(get_chat_service),
 ):
-    """ This api create a new thread when use click new chat then add title and content history"""
+    """This api create a new thread when use click new chat then add title and content history"""
     thread = chat_service.create_thread(
         user_id=current_user.id,
         title=request.title,

@@ -7,12 +7,18 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from ...config import SessionLocal
 from ...dependencies.auth import get_auth_service, require_current_user
 from ...repository.chat_repository import ChatRepository
-from ...schema.chat_schema import ChatStreamRequest, MessageMetadata, MessageProcessMetadata
+from ...schema.chat_schema import (
+    ChatStreamRequest,
+    MessageMetadata,
+    MessageProcessMetadata,
+)
 from ...service.auth_service import AuthService, QuotaExceededError
 from ...service.chat_service import ChatService
 from ...service.choice_resolver import ChoiceResolver, ChoiceResolverInput
-from ....workflow.openai_flow.openai_tool.openai_tool_graph import GraphRunContext, OpenAIToolGraph
-
+from ....workflow.openai_flow.openai_tool.openai_tool_graph import (
+    GraphRunContext,
+    OpenAIToolGraph,
+)
 
 router = APIRouter(tags=["chat_bot"])
 
@@ -105,7 +111,9 @@ async def chat(
                 },
             )
 
-            async for event in graph.run_stream(
+            async for (
+                event
+            ) in graph.run_stream(  # here send everything to llm and get a response in streaming
                 messages=context.llm_messages,
                 previous_context=context.previous_context,
             ):
@@ -163,7 +171,11 @@ async def chat(
                         "assistant_message_id": final_message.id,
                         "status": final_message.status,
                         "content": final_message.content,
-                        "completed_at": final_message.completed_at.isoformat() if final_message.completed_at else None,
+                        "completed_at": (
+                            final_message.completed_at.isoformat()
+                            if final_message.completed_at
+                            else None
+                        ),
                         "metadata_json": final_metadata,
                     },
                 )
@@ -182,7 +194,9 @@ async def chat(
         except Exception as stream_error:
             failed_metadata = dict(final_metadata or {})
             failed_process = dict((failed_metadata.get("process") or {}))
-            failed_process["execution_mode"] = failed_process.get("execution_mode") or "failed"
+            failed_process["execution_mode"] = (
+                failed_process.get("execution_mode") or "failed"
+            )
             failed_metadata["process"] = failed_process
             final_message = chat_service.finalize_stream(
                 user_id=current_user.id,

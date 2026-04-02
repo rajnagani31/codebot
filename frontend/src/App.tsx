@@ -1273,8 +1273,15 @@ function App() {
   };
 
   const authFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const headers = new Headers(init?.headers);
+    const accessToken = getStoredAccessToken();
+    if (accessToken && !headers.has("Authorization")) {
+      headers.set("Authorization", `Bearer ${accessToken}`);
+    }
+
     return fetch(input, {
       ...init,
+      headers,
       credentials: "include",
     });
   };

@@ -20,7 +20,18 @@ class _ReadableHtmlParser(HTMLParser):
         if tag in {"script", "style", "noscript"}:
             self._skip_depth += 1
             return
-        if tag in {"p", "li", "article", "section", "div", "br", "h1", "h2", "h3", "h4"}:
+        if tag in {
+            "p",
+            "li",
+            "article",
+            "section",
+            "div",
+            "br",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+        }:
             self.parts.append("\n")
 
     def handle_endtag(self, tag: str):
@@ -75,14 +86,29 @@ class WebContentService:
         return normalized
 
     async def fetch_and_extract(self, url: str) -> dict[str, str | None]:
-        return await asyncio.wait_for(asyncio.to_thread(self._fetch_and_extract_sync, url), timeout=self.per_request_timeout)
+        return await asyncio.wait_for(
+            asyncio.to_thread(self._fetch_and_extract_sync, url),
+            timeout=self.per_request_timeout,
+        )
 
-    def summarize(self, *, query: str, title: str, snippet: str, content: str, max_chars: int = 420) -> str:
+    def summarize(
+        self,
+        *,
+        query: str,
+        title: str,
+        snippet: str,
+        content: str,
+        max_chars: int = 420,
+    ) -> str:
         text = " ".join(part for part in [snippet, content] if part).strip()
         if not text:
             return f"{title}: no readable content extracted."
         text = re.sub(r"\s+", " ", text)
-        summary = text[:max_chars].rsplit(" ", 1)[0].strip() if len(text) > max_chars else text
+        summary = (
+            text[:max_chars].rsplit(" ", 1)[0].strip()
+            if len(text) > max_chars
+            else text
+        )
         return summary or text[:max_chars]
 
     def clean_text(self, text: str, max_chars: int = 2000) -> str:
