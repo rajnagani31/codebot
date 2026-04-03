@@ -6,7 +6,6 @@ from langchain_core.tools import tool
 
 from bot.application.service.web_search_service import WebSearchService
 
-
 # @tool
 # def get_current_weather(location: str) -> str:
 #     """Get the current weather in a given location."""
@@ -87,7 +86,9 @@ def build_tools(
 
     if capabilities.web_search_enabled:
         if execution_context.web_search_service is None:
-            raise ValueError("web_search_service is required when web search tools are enabled")
+            raise ValueError(
+                "web_search_service is required when web search tools are enabled"
+            )
 
         @tool
         async def web_search(query: str) -> dict:

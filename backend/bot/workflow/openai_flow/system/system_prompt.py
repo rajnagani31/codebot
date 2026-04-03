@@ -66,7 +66,9 @@ Behavior:
 """
 
 
-def _review_prompt(previous_context: str, web_enabled: bool, web_preferred: bool) -> str:
+def _review_prompt(
+    previous_context: str, web_enabled: bool, web_preferred: bool
+) -> str:
     return f"""
 You are Codebot in code review mode.
 
@@ -80,7 +82,9 @@ Behavior:
 """
 
 
-def _web_research_prompt(previous_context: str, web_enabled: bool, web_preferred: bool) -> str:
+def _web_research_prompt(
+    previous_context: str, web_enabled: bool, web_preferred: bool
+) -> str:
     return f"""
 You are Codebot in web research mode.
 

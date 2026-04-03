@@ -3,7 +3,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-
 ChatMode = Literal["chat", "code", "debug", "review"]
 UserType = Literal["guest", "registered"]
 ChoiceMode = Literal["auto", "manual"]

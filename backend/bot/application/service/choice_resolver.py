@@ -7,7 +7,6 @@ from ..schema.chat_schema import (
     ResolvedChoiceConfig,
 )
 
-
 AUTO_WEB_KEYWORDS = (
     "latest",
     "current",
@@ -35,8 +34,12 @@ class ChoiceResolverInput:
 class ChoiceResolver:
     def resolve(self, payload: ChoiceResolverInput) -> ResolvedChoiceConfig:
         raw_choice = self._normalize_choice(payload.choice_config, payload.use_web)
-        prompt_name = self._resolve_prompt_name(raw_choice=raw_choice, mode=payload.mode, query=payload.query)
-        model_name = self._resolve_model_name(raw_choice=raw_choice, prompt_name=prompt_name, query=payload.query)
+        prompt_name = self._resolve_prompt_name(
+            raw_choice=raw_choice, mode=payload.mode, query=payload.query
+        )
+        model_name = self._resolve_model_name(
+            raw_choice=raw_choice, prompt_name=prompt_name, query=payload.query
+        )
         web_enabled, web_preferred = self._resolve_web_flags(raw_choice)
 
         return ResolvedChoiceConfig(
@@ -51,9 +54,13 @@ class ChoiceResolver:
             choice_config=raw_choice,
         )
 
-    def _normalize_choice(self, choice_config: ChoiceConfig | None, use_web: bool | None) -> ChoiceConfig:
-        choice = choice_config.model_copy() if choice_config is not None else ChoiceConfig()
-    
+    def _normalize_choice(
+        self, choice_config: ChoiceConfig | None, use_web: bool | None
+    ) -> ChoiceConfig:
+        choice = (
+            choice_config.model_copy() if choice_config is not None else ChoiceConfig()
+        )
+
         if use_web is not None and choice_config is None:
             choice.web_mode = "on" if use_web else "off"
 
@@ -65,7 +72,9 @@ class ChoiceResolver:
 
         return choice
 
-    def _resolve_prompt_name(self, *, raw_choice: ChoiceConfig, mode: ChatMode, query: str) -> PromptName:
+    def _resolve_prompt_name(
+        self, *, raw_choice: ChoiceConfig, mode: ChatMode, query: str
+    ) -> PromptName:
         if raw_choice.prompt_mode == "manual" and raw_choice.prompt_name:
             return raw_choice.prompt_name
 
@@ -81,7 +90,9 @@ class ChoiceResolver:
             return "review"
         return "chat"
 
-    def _resolve_model_name(self, *, raw_choice: ChoiceConfig, prompt_name: PromptName, query: str) -> str:
+    def _resolve_model_name(
+        self, *, raw_choice: ChoiceConfig, prompt_name: PromptName, query: str
+    ) -> str:
         if raw_choice.model_mode == "manual" and raw_choice.model_name:
             return raw_choice.model_name
 

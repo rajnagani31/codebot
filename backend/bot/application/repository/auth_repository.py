@@ -53,7 +53,9 @@ class AuthRepository:
         finally:
             session.close()
 
-    def create_password_user(self, *, email: str, display_name: str | None, password_hash: str) -> ChatUser:
+    def create_password_user(
+        self, *, email: str, display_name: str | None, password_hash: str
+    ) -> ChatUser:
         session = self.session_factory()
         now = datetime.utcnow()
         normalized_email = email.lower()
@@ -141,7 +143,7 @@ class AuthRepository:
 
             session.commit()
             session.refresh(user)
-            return user 
+            return user
         finally:
             session.close()
 
@@ -249,7 +251,9 @@ class AuthRepository:
         finally:
             session.close()
 
-    def get_identity(self, *, provider: str, provider_user_id: str) -> AuthIdentity | None:
+    def get_identity(
+        self, *, provider: str, provider_user_id: str
+    ) -> AuthIdentity | None:
         session = self.session_factory()
         try:
             return session.execute(
@@ -318,7 +322,6 @@ class AuthRepository:
         session = self.session_factory()
         try:
             user_session = session.get(UserSession, session_id)
-            print("Fetched user session for session_id", session_id, "session:", user_session.user_id)
             if user_session is None:
                 return None
             user = session.get(ChatUser, user_session.user_id)

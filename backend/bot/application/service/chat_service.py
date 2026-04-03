@@ -6,6 +6,7 @@ from ...workflow.pg_vector.pg_vector_service import PGVectorService
 from ..repository.chat_repository import ChatRepository
 from ...workflow.qudrant.vector_service import QdrantVectorService
 
+
 @dataclass
 class ChatStreamContext:
     thread_id: str
@@ -19,7 +20,14 @@ class ChatService:
     def __init__(self, repository: ChatRepository):
         self.repository = repository
 
-    def create_thread(self, *, user_id: int, title: str, mode: str, client_session_id: str | None = None):
+    def create_thread(
+        self,
+        *,
+        user_id: int,
+        title: str,
+        mode: str,
+        client_session_id: str | None = None,
+    ):
         return self.repository.create_thread(
             user_id=user_id,
             title=title,
@@ -49,7 +57,9 @@ class ChatService:
         if thread is None:
             raise KeyError("Thread not found")
 
-        previous_messages = self.repository.recent_messages(user_id=user_id, thread_id=thread_id)
+        previous_messages = self.repository.recent_messages(
+            user_id=user_id, thread_id=thread_id
+        )
         user_message = self.repository.create_message(
             thread_id=thread_id,
             user_id=user_id,

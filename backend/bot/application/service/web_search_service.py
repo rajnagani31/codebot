@@ -32,7 +32,9 @@ class WebSearchService:
     ) -> dict:
         search_payload = await self.provider.search(query, max_results=max_results)
         search_results = list(search_payload.get("results", []))[:max_results]
-        urls = [str(item.get("url") or "") for item in search_results if item.get("url")]
+        urls = [
+            str(item.get("url") or "") for item in search_results if item.get("url")
+        ]
         fetched_pages = await self.content_service.fetch_many(urls)
 
         sources: list[dict] = []
@@ -50,7 +52,10 @@ class WebSearchService:
                     "rank": int(item.get("rank") or 0),
                     "title": title,
                     "url": str(item.get("url") or ""),
-                    "domain": str(item.get("domain") or urlparse(str(item.get("url") or "")).netloc),
+                    "domain": str(
+                        item.get("domain")
+                        or urlparse(str(item.get("url") or "")).netloc
+                    ),
                     "snippet": str(item.get("snippet") or ""),
                     "summary": summary,
                     "content_text": content_text,
@@ -65,7 +70,9 @@ class WebSearchService:
             thread_id=thread_id,
             message_id=message_id,
             sources=sources,
-            provider_name=str(search_payload.get("provider") or self.provider.provider_name),
+            provider_name=str(
+                search_payload.get("provider") or self.provider.provider_name
+            ),
         )
 
         return self.build_context_pack(query=query, run_id=run_id, sources=sources)
@@ -86,7 +93,9 @@ class WebSearchService:
             "content_text": page.get("text") or "",
         }
 
-    def build_context_pack(self, *, query: str, run_id: str, sources: list[dict]) -> dict:
+    def build_context_pack(
+        self, *, query: str, run_id: str, sources: list[dict]
+    ) -> dict:
         source_summaries = [
             {
                 "rank": source["rank"],

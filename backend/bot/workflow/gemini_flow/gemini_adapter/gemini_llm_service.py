@@ -20,7 +20,7 @@ load_dotenv()
 
 #         messages = [("system", "You are a helpful assistant."),
 #                     ("user", prompt)]
-        
+
 #         ai_msg = model.invoke(messages)
 #         print(ai_msg)
 
