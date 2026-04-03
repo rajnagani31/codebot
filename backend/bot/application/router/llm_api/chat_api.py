@@ -19,6 +19,12 @@ from ....workflow.openai_flow.openai_tool.openai_tool_graph import (
     GraphRunContext,
     OpenAIToolGraph,
 )
+import uuid
+from datetime import datetime
+
+from sqlalchemy import func, select
+
+from ...model.chat_history import ChatMessage, ChatThread, ChatUser
 
 router = APIRouter(tags=["chat_bot"])
 
@@ -45,9 +51,9 @@ async def chat(
                 query=request.query,
                 mode=request.mode,
                 choice_config=request.choice_config,
-                use_web=request.use_web,
             )
         )
+        print(f"Resolved choice: {resolved_choice}")
         base_metadata = MessageMetadata(
             process=MessageProcessMetadata(
                 choice_config=resolved_choice.choice_config.model_dump(),
@@ -55,6 +61,7 @@ async def chat(
                 execution_mode="pending",
                 tools_used=[],
                 web_search_used=False,
+                current_info_requested=resolved_choice.current_info_requested,
                 model_name=resolved_choice.model_name,
                 prompt_name=resolved_choice.prompt_name,
             ),
@@ -227,14 +234,103 @@ async def chat(
 @router.post("/chat/stream/test")
 async def chat_test(
     user: str,
-    current_user=Depends(require_current_user),
+    # current_user=Depends(require_current_user),
 ):
+    # Fiter in SqlAlchemy model to get user details based on email or username
+    session = SessionLocal()
+    users = []
+    # get_all_user_thread = session.query(ChatThread).all()
+    get_all_user_thread = select(ChatThread)
+    result = session.execute(get_all_user_thread)
+    users_list = result.scalars().all()
+    for user in users_list:
+        users.append(
+            {
+                "id": user.id,
+                "email": user.user_id,
+                "title": user.title,
+                "mode": user.mode,
+                "client": user.client_session_id,
+                "is_active": user.is_archived,
+                # "updated_at": str(user.updated_at),
+                # "created_at": str(user.created_at),
+                "updated_at": user.updated_at.isoformat() if user.updated_at else None, # .isoformat is convers datetime into JSON
+                "created_at": user.created_at.isoformat() if user.created_at else None,
+            }
+        )
+
+    "--------------------------------------------------------------------------------------"
+    # get threads based on user_id and count
+    # get_user_thread = select(func.count()).select_from(ChatThread).where(ChatThread.user_id == 138) _> count
+    # get_user_thread = select(ChatThread.id, ChatThread.user_id).where(ChatThread.user_id == 138) # get all threads for user_id 138
+    get_user_thread = select(ChatThread).where(ChatThread.user_id == 138) # get all threads for user_id 138
+    result = session.execute(get_user_thread)
+    # rows = result.fetchall()
+    user_threads = result.scalars().all()
+    user_thread_list = []
+
+    for thread in user_threads: 
+
+        user_thread_list.append(
+            {
+                "id": thread.id,
+                "email": thread.user_id,
+                "title": thread.title,
+                "mode": thread.mode,
+                "client": thread.client_session_id,
+                "is_active": thread.is_archived,
+                "updated_at": thread.updated_at.isoformat() if thread.updated_at else None,
+                "created_at": thread.created_at.isoformat() if thread.created_at else None,
+            }
+    )
+        
+
+    "--------------------------------------------------------------------------------------"
+    # insert data in database using SQLAlchemy
+    new_thread = [
+        ChatThread(id=7,user_id=138,title="Test Thread",mode="test",client_session_id="test_client",created_at=datetime.utcnow(),updated_at=datetime.utcnow()),
+        ChatThread(id=8,user_id=138,title="Test Thread",mode="test",client_session_id="test_client",created_at=datetime.utcnow(),updated_at=datetime.utcnow()),
+        ChatThread(id=9,user_id=138,title="Test Thread",mode="test",client_session_id="test_client",created_at=datetime.utcnow(),updated_at=datetime.utcnow()),
+        ]
+    if new_thread:
+        return JSONResponse(
+            {
+                "message": "Thread already exists",
+            }
+        )
+
+    session.add_all(new_thread)
+    # session.bulk_save_objects(new_thread)
+    session.commit()
+    # session.refresh(new_thread) 
+
     return JSONResponse(
         {
-            "user": user,
-            "current_user": {
-                "id": current_user.id,
-                "email": current_user.email,
-            },
+            # "thead_count": user_threads,
+            # "user_threads": user_thread_list,
+            "message": "Test successful",
         }
     )
+
+
+@router.post("sqlalchemy/test/lookups")
+async def sqlalchemy_lookups():
+    session = SessionLocal()
+    # Example of using SQLAlchemy to perform lookups
+    # Get all threads for a specific user_id
+    user_id = 138
+    threads = session.query(ChatThread).filter(ChatThread.user_id == user_id).all()
+    thread_data = []
+    for thread in threads:
+        thread_data.append(
+            {
+                "id": thread.id,
+                "user_id": thread.user_id,
+                "title": thread.title,
+                "mode": thread.mode,
+                "client_session_id": thread.client_session_id,
+                "created_at": thread.created_at.isoformat() if thread.created_at else None,
+                "updated_at": thread.updated_at.isoformat() if thread.updated_at else None,
+            }
+        )
+    return JSONResponse({"threads": thread_data})

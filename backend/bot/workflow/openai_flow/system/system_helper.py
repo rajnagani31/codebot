@@ -12,11 +12,13 @@ class GetSytemInstruction:
         prompt_name: str = "chat",
         web_enabled: bool = False,
         web_preferred: bool = False,
+        current_info_requested: bool = False,
     ) -> list[BaseMessage]:
         system_message = build_system_prompt(
             prompt_name,
             previous_context=previous_context or "",
             web_enabled=web_enabled,
             web_preferred=web_preferred,
+            current_info_requested=current_info_requested,
         )
         return [SystemMessage(content=system_message), *messages]

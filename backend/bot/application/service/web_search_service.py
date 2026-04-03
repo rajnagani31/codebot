@@ -41,6 +41,7 @@ class WebSearchService:
         for item, page in zip(search_results, fetched_pages, strict=False):
             title = str(page.get("title") or item.get("title") or item.get("url") or "")
             content_text = str(page.get("text") or "")
+            content_preview = str(page.get("preview") or "")
             summary = self.content_service.summarize(
                 query=query,
                 title=title,
@@ -58,6 +59,7 @@ class WebSearchService:
                     ),
                     "snippet": str(item.get("snippet") or ""),
                     "summary": summary,
+                    "content_preview": content_preview,
                     "content_text": content_text,
                     "published_at": item.get("published_at"),
                     "status": page.get("status") or "completed",
@@ -90,6 +92,7 @@ class WebSearchService:
             "title": page.get("title") or url,
             "url": url,
             "summary": summary,
+            "content_preview": page.get("preview") or "",
             "content_text": page.get("text") or "",
         }
 
@@ -104,6 +107,7 @@ class WebSearchService:
                 "domain": source["domain"],
                 "snippet": source["snippet"],
                 "summary": source["summary"],
+                "content_preview": source["content_preview"],
             }
             for source in sources
         ]
@@ -169,6 +173,7 @@ class WebSearchService:
                         metadata_json={
                             "status": source["status"],
                             "published_at": source.get("published_at"),
+                            "content_preview": source.get("content_preview"),
                         },
                     )
                 )

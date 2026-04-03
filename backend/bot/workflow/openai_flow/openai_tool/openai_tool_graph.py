@@ -126,6 +126,7 @@ class OpenAIToolGraph:
             prompt_name=self.resolved_choice.prompt_name,
             web_enabled=self.resolved_choice.web_enabled,
             web_preferred=self.resolved_choice.web_preferred,
+            current_info_requested=self.resolved_choice.current_info_requested,
         )
 
         async for chunk in self.llm._chat_model.astream(full_messages):
@@ -145,6 +146,7 @@ class OpenAIToolGraph:
         tool_args = tool_call.get("args", {})
         try:
             if tool_name == "web_search":
+                # self.web_search_service = None
                 if self.web_search_service is None:
                     raise RuntimeError("Web search is not enabled")
 
@@ -267,6 +269,7 @@ class OpenAIToolGraph:
                 execution_mode=execution_mode,
                 tools_used=tools_used,
                 web_search_used=bool(web_tools_used),
+                current_info_requested=self.resolved_choice.current_info_requested,
                 model_name=self.resolved_choice.model_name,
                 prompt_name=self.resolved_choice.prompt_name,
             ),

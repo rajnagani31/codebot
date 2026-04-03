@@ -18,7 +18,7 @@ class ChoiceConfig(BaseModel):
     model_name: ModelName | None = None
     prompt_mode: SelectorMode = "auto"
     prompt_name: PromptName | None = None
-    web_mode: WebMode = "auto"
+    web_mode: WebMode = "on"
 
 
 class ResolvedChoiceConfig(BaseModel):
@@ -30,6 +30,7 @@ class ResolvedChoiceConfig(BaseModel):
     web_mode: WebMode
     web_enabled: bool
     web_preferred: bool
+    current_info_requested: bool = False
     choice_config: ChoiceConfig
 
 
@@ -39,6 +40,7 @@ class SourceSummary(BaseModel):
     domain: str
     snippet: str = ""
     summary: str = ""
+    content_preview: str = ""
     rank: int = 0
 
 
@@ -48,6 +50,7 @@ class MessageProcessMetadata(BaseModel):
     execution_mode: str | None = None
     tools_used: list[str] = Field(default_factory=list)
     web_search_used: bool = False
+    current_info_requested: bool = False
     model_name: str | None = None
     prompt_name: str | None = None
 
@@ -144,5 +147,4 @@ class ChatStreamRequest(BaseModel):
     query: str
     code: str | None = None
     mode: ChatMode = "chat"
-    use_web: bool | None = None
     choice_config: ChoiceConfig | None = None

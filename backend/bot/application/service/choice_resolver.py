@@ -7,7 +7,7 @@ from ..schema.chat_schema import (
     ResolvedChoiceConfig,
 )
 
-AUTO_WEB_KEYWORDS = (
+CURRENT_INFO_KEYWORDS = (
     "latest",
     "current",
     "today",
@@ -20,6 +20,7 @@ AUTO_WEB_KEYWORDS = (
     "api",
     "pricing",
     "announce",
+    "announcement",
 )
 
 
@@ -28,19 +29,24 @@ class ChoiceResolverInput:
     query: str
     mode: ChatMode
     choice_config: ChoiceConfig | None = None
-    use_web: bool | None = None
 
 
 class ChoiceResolver:
     def resolve(self, payload: ChoiceResolverInput) -> ResolvedChoiceConfig:
-        raw_choice = self._normalize_choice(payload.choice_config, payload.use_web)
+        raw_choice = self._normalize_choice(payload.choice_config)
+        current_info_requested = self._query_needs_current_info(payload.query)
         prompt_name = self._resolve_prompt_name(
-            raw_choice=raw_choice, mode=payload.mode, query=payload.query
+            raw_choice=raw_choice,
+            mode=payload.mode,
         )
         model_name = self._resolve_model_name(
             raw_choice=raw_choice, prompt_name=prompt_name, query=payload.query
         )
-        web_enabled, web_preferred = self._resolve_web_flags(raw_choice)
+        web_enabled, web_preferred = self._resolve_web_flags(
+            raw_choice=raw_choice,
+            prompt_name=prompt_name,
+            current_info_requested=current_info_requested,
+        )
 
         return ResolvedChoiceConfig(
             mode=raw_choice.mode,
@@ -51,18 +57,14 @@ class ChoiceResolver:
             web_mode=raw_choice.web_mode,
             web_enabled=web_enabled,
             web_preferred=web_preferred,
+            current_info_requested=current_info_requested,
             choice_config=raw_choice,
         )
 
-    def _normalize_choice(
-        self, choice_config: ChoiceConfig | None, use_web: bool | None
-    ) -> ChoiceConfig:
+    def _normalize_choice(self, choice_config: ChoiceConfig | None) -> ChoiceConfig:
         choice = (
             choice_config.model_copy() if choice_config is not None else ChoiceConfig()
         )
-
-        if use_web is not None and choice_config is None:
-            choice.web_mode = "on" if use_web else "off"
 
         if choice.mode == "manual":
             if choice.model_name:
@@ -73,14 +75,10 @@ class ChoiceResolver:
         return choice
 
     def _resolve_prompt_name(
-        self, *, raw_choice: ChoiceConfig, mode: ChatMode, query: str
+        self, *, raw_choice: ChoiceConfig, mode: ChatMode
     ) -> PromptName:
         if raw_choice.prompt_mode == "manual" and raw_choice.prompt_name:
             return raw_choice.prompt_name
-
-        normalized_query = query.lower()
-        if any(keyword in normalized_query for keyword in AUTO_WEB_KEYWORDS):
-            return "web_research"
 
         if mode == "code":
             return "code"
@@ -104,9 +102,20 @@ class ChoiceResolver:
 
         return "gpt-4o-mini"
 
-    def _resolve_web_flags(self, raw_choice: ChoiceConfig) -> tuple[bool, bool]:
+    def _resolve_web_flags(
+        self,
+        *,
+        raw_choice: ChoiceConfig,
+        prompt_name: PromptName,
+        current_info_requested: bool,
+    ) -> tuple[bool, bool]:
         if raw_choice.web_mode == "off":
             return False, False
-        if raw_choice.web_mode == "on":
-            return True, True
-        return True, False
+
+        web_enabled = True
+        web_preferred = prompt_name == "web_research" or current_info_requested
+        return web_enabled, web_preferred
+
+    def _query_needs_current_info(self, query: str) -> bool:
+        normalized_query = query.lower()
+        return any(keyword in normalized_query for keyword in CURRENT_INFO_KEYWORDS)

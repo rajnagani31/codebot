@@ -10,7 +10,8 @@ from bot.workflow.web.content_extractor import WebContentService
 
 
 async def main():
-    url = "https://example.com"
+    url = "https://docs.langchain.com/oss/python/langchain/rag#loading-documents"
+    # url = "https://docs.langchain.com/oss/python/langchain/rag.md"
     service = WebContentService()
 
     page = await service.fetch_and_extract(url)
@@ -19,7 +20,7 @@ async def main():
     print(f"Title : {page.get('title')}")
     print(f"Status: {page.get('status')}")
     print("Text  :")
-    print((page.get("text") or "")[:1000])
+    print((page.get("text") or "")[:5000])
 
 
 if __name__ == "__main__":

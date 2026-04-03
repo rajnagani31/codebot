@@ -7,6 +7,7 @@ requires-python = ">=3.11"
 dependencies = [
     "alembic>=1.14.1",
     "black>=26.3.1",
+    "beautifulsoup4>=4.12.3",
     "dotenv>=0.9.9",
     "fastapi>=0.135.1",
     "langchain>=1.2.10",
