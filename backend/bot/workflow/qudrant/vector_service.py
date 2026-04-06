@@ -20,8 +20,7 @@ class QdrantVectorService:
         self.embedding = OpenAIEmbeddings(model="text-embedding-3-small")
 
         self.splitter = RecursiveCharacterTextSplitter(
-            chunk_size=500,
-            chunk_overlap=100
+            chunk_size=500, chunk_overlap=100
         )
 
         self._create_collection()
@@ -36,9 +35,8 @@ class QdrantVectorService:
             self.client.create_collection(
                 collection_name=self.collection_name,
                 vectors_config=models.VectorParams(
-                    size=1536,
-                    distance=models.Distance.COSINE
-                )
+                    size=1536, distance=models.Distance.COSINE
+                ),
             )
 
     # =========================
@@ -60,15 +58,12 @@ class QdrantVectorService:
                         "user_id": user_id,
                         "text": chunk,
                         "type": type_,
-                        "timestamp": datetime.utcnow().isoformat()
-                    }
+                        "timestamp": datetime.utcnow().isoformat(),
+                    },
                 )
             )
 
-        self.client.upsert(
-            collection_name=self.collection_name,
-            points=points
-        )
+        self.client.upsert(collection_name=self.collection_name, points=points)
 
     # =========================
     # SEARCH
@@ -83,15 +78,10 @@ class QdrantVectorService:
             query_filter=models.Filter(
                 must=[
                     models.FieldCondition(
-                        key="user_id",
-                        match=models.MatchValue(value=user_id)
+                        key="user_id", match=models.MatchValue(value=user_id)
                     )
                 ]
-            )
+            ),
         )
 
-        return [
-            r.payload.get("text", "")
-            for r in response.points
-            if r.payload
-        ]
+        return [r.payload.get("text", "") for r in response.points if r.payload]

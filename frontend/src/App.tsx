@@ -3,16 +3,15 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNod
 type ChatMode = "chat" | "code" | "debug" | "review";
 type ThemeName = "normal" | "black" | "white";
 type MessageStatus = "pending" | "streaming" | "completed" | "failed" | "stopped";
-type ChoiceMode = "auto" | "manual";
 type SelectorMode = "auto" | "manual";
-type WebMode = "off" | "auto" | "on";
+type WebMode = "off" | "on";
 type ModelName = "gpt-4o-mini" | "gpt-4o" | "gpt-5" | "gpt-5.4-mini";
 type PromptName = "chat" | "code" | "debug" | "review" | "web_research";
 type ModelSelection = "auto" | ModelName;
 type PromptSelection = "auto" | PromptName;
 
 type ChoiceConfig = {
-  mode: ChoiceMode;
+  mode: "manual";
   model_mode: SelectorMode;
   model_name: ModelName | null;
   prompt_mode: SelectorMode;
@@ -26,6 +25,7 @@ type SourceSummary = {
   domain: string;
   snippet: string;
   summary: string;
+  content_preview?: string;
   rank: number;
 };
 
@@ -157,6 +157,11 @@ type ContentBlock =
       type: "code";
       language: string;
       content: string;
+    }
+  | {
+      type: "table";
+      headers: string[];
+      rows: string[][];
     };
 
 type ExampleSection = {
@@ -226,32 +231,18 @@ const manualPromptOptions: Array<{ value: PromptSelection; label: string }> = [
   { value: "code", label: "Code" },
   { value: "debug", label: "Debug" },
   { value: "review", label: "Review" },
-  { value: "web_research", label: "Research" },
 ];
 
 const manualWebOptions: Array<{ value: WebMode; label: string }> = [
-  { value: "off", label: "Web Off" },
-  { value: "auto", label: "Web Auto" },
   { value: "on", label: "Web On" },
+  { value: "off", label: "Web Off" },
 ];
 
 function buildChoiceConfig(
-  choiceMode: ChoiceMode,
   modelSelection: ModelSelection,
   promptSelection: PromptSelection,
   webMode: WebMode,
 ): ChoiceConfig {
-  if (choiceMode === "auto") {
-    return {
-      mode: "auto",
-      model_mode: "auto",
-      model_name: null,
-      prompt_mode: "auto",
-      prompt_name: null,
-      web_mode: "auto",
-    };
-  }
-
   return {
     mode: "manual",
     model_mode: modelSelection === "auto" ? "auto" : "manual",
@@ -454,8 +445,22 @@ function isSpecialBlockStart(line: string) {
     /^#{1,4}\s+/.test(trimmed) ||
     /^>\s?/.test(trimmed) ||
     /^[-*]\s+/.test(trimmed) ||
-    /^\d+\.\s+/.test(trimmed)
+    /^\d+\.\s+/.test(trimmed) ||
+    /^\|.*\|$/.test(trimmed)
   );
+}
+
+function isPotentialTableRow(line: string) {
+  return /^\|.*\|$/.test(line.trim());
+}
+
+function isTableSeparatorRow(line: string) {
+  return /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?$/.test(line.trim());
+}
+
+function parseTableRow(line: string) {
+  const normalized = line.trim().replace(/^\|/, "").replace(/\|$/, "");
+  return normalized.split("|").map((cell) => cell.trim());
 }
 
 function parseContentBlocks(content: string): ContentBlock[] {
@@ -542,6 +547,42 @@ function parseContentBlocks(content: string): ContentBlock[] {
       }
 
       blocks.push({ type: "list", ordered, items });
+      continue;
+    }
+
+    if (isPotentialTableRow(trimmed)) {
+      const tableLines: string[] = [];
+
+      while (index < lines.length && isPotentialTableRow(lines[index])) {
+        tableLines.push(lines[index].trim());
+        index += 1;
+      }
+
+      if (tableLines.length >= 2) {
+        const rawRows = tableLines
+          .filter((tableLine) => !isTableSeparatorRow(tableLine))
+          .map(parseTableRow)
+          .filter((row) => row.some((cell) => cell));
+
+        if (rawRows.length >= 2) {
+          const columnCount = Math.max(...rawRows.map((row) => row.length));
+          const normalizedRows = rawRows.map((row) =>
+            Array.from({ length: columnCount }, (_, cellIndex) => row[cellIndex] ?? ""),
+          );
+
+          blocks.push({
+            type: "table",
+            headers: normalizedRows[0],
+            rows: normalizedRows.slice(1),
+          });
+          continue;
+        }
+      }
+
+      blocks.push({
+        type: "paragraph",
+        content: tableLines.join(" "),
+      });
       continue;
     }
 
@@ -959,22 +1000,7 @@ async function copyText(value: string) {
   document.body.removeChild(textarea);
 }
 
-function AssistantMessageContent({ content, isStreaming }: { content: string; isStreaming: boolean }) {
-  const structuredAnswer = useMemo(() => parseStructuredAnswer(content), [content]);
-  const blocks = useMemo(() => parseContentBlocks(content), [content]);
-
-  if (!content) {
-    return <p className="assistant-thinking">{isStreaming ? "Thinking..." : ""}</p>;
-  }
-
-  if (structuredAnswer) {
-    return <StructuredAnswerContent answer={structuredAnswer} />;
-  }
-
-  if (!blocks.length) {
-    return <p className="assistant-paragraph">{content}</p>;
-  }
-
+function MarkdownBlocksContent({ blocks }: { blocks: ContentBlock[] }) {
   return (
     <div className="assistant-markdown">
       {blocks.map((block, index) => {
@@ -1029,12 +1055,35 @@ function AssistantMessageContent({ content, isStreaming }: { content: string; is
           );
         }
 
+        if (block.type === "table") {
+          return <TableBlockContent headers={block.headers} key={`table-${index}`} rows={block.rows} />;
+        }
+
         return (
           <CodeBlockContent content={block.content} key={`code-${index}`} language={block.language} />
         );
       })}
     </div>
   );
+}
+
+function AssistantMessageContent({ content, isStreaming }: { content: string; isStreaming: boolean }) {
+  const structuredAnswer = useMemo(() => parseStructuredAnswer(content), [content]);
+  const blocks = useMemo(() => parseContentBlocks(content), [content]);
+
+  if (!content) {
+    return <p className="assistant-thinking">{isStreaming ? "Thinking..." : ""}</p>;
+  }
+
+  if (structuredAnswer) {
+    return <StructuredAnswerContent answer={structuredAnswer} />;
+  }
+
+  if (!blocks.length) {
+    return <p className="assistant-paragraph">{content}</p>;
+  }
+
+  return <MarkdownBlocksContent blocks={blocks} />;
 }
 
 function CopyButton({ value }: { value: string }) {
@@ -1177,6 +1226,47 @@ function CodeBlockContent({ content, language }: { content: string; language: st
   return <CodeSurface content={content} label="Code" language={language} />;
 }
 
+function TableBlockContent({ headers, rows }: { headers: string[]; rows: string[][] }) {
+  return (
+    <div className="assistant-table-wrap">
+      <table className="assistant-table">
+        <thead>
+          <tr>
+            {headers.map((header, index) => (
+              <th key={`header-${index}`} scope="col">
+                {renderInlineContent(header)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, rowIndex) => (
+            <tr key={`row-${rowIndex}`}>
+              {row.map((cell, cellIndex) => (
+                <td key={`cell-${rowIndex}-${cellIndex}`}>{renderInlineContent(cell)}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SourcePreviewContent({ content }: { content: string }) {
+  const blocks = useMemo(() => parseContentBlocks(content), [content]);
+
+  if (!blocks.length) {
+    return <p className="source-card-summary">{content}</p>;
+  }
+
+  return (
+    <div className="source-card-preview">
+      <MarkdownBlocksContent blocks={blocks} />
+    </div>
+  );
+}
+
 function SourceCards({ sources }: { sources: SourceSummary[] }) {
   if (!sources.length) {
     return null;
@@ -1185,20 +1275,22 @@ function SourceCards({ sources }: { sources: SourceSummary[] }) {
   return (
     <section className="source-card-stack">
       {sources.map((source) => (
-        <a
-          className="source-card"
-          href={source.url}
-          key={`${source.rank}-${source.url}`}
-          rel="noreferrer"
-          target="_blank"
-        >
+        <article className="source-card" key={`${source.rank}-${source.url}`}>
           <div className="source-card-header">
             <span className="source-card-rank">{String(source.rank).padStart(2, "0")}</span>
             <span className="source-card-domain">{source.domain}</span>
           </div>
-          <p className="source-card-title">{source.title}</p>
+          <a
+            className="source-card-title"
+            href={source.url}
+            rel="noreferrer"
+            target="_blank"
+          >
+            {source.title}
+          </a>
           <p className="source-card-summary">{source.summary || source.snippet}</p>
-        </a>
+          {source.content_preview?.trim() ? <SourcePreviewContent content={source.content_preview} /> : null}
+        </article>
       ))}
     </section>
   );
@@ -1222,10 +1314,9 @@ function App() {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<ChatMode>("chat");
-  const [choiceMode, setChoiceMode] = useState<ChoiceMode>("auto");
   const [manualModelSelection, setManualModelSelection] = useState<ModelSelection>("auto");
   const [manualPromptSelection, setManualPromptSelection] = useState<PromptSelection>("auto");
-  const [manualWebMode, setManualWebMode] = useState<WebMode>("auto");
+  const [manualWebMode, setManualWebMode] = useState<WebMode>("on");
   const [codeContext, setCodeContext] = useState("");
   const [showCodeContext, setShowCodeContext] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -1273,8 +1364,15 @@ function App() {
   };
 
   const authFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const headers = new Headers(init?.headers);
+    const accessToken = getStoredAccessToken();
+    if (accessToken && !headers.has("Authorization")) {
+      headers.set("Authorization", `Bearer ${accessToken}`);
+    }
+
     return fetch(input, {
       ...init,
+      headers,
       credentials: "include",
     });
   };
@@ -1632,7 +1730,7 @@ function App() {
     setStreamProgress(null);
 
     let threadId = activeThread?.id;
-    const choiceConfig = buildChoiceConfig(choiceMode, manualModelSelection, manualPromptSelection, manualWebMode);
+    const choiceConfig = buildChoiceConfig(manualModelSelection, manualPromptSelection, manualWebMode);
 
     if (!threadId) {
       try {
@@ -2528,65 +2626,43 @@ function App() {
 
               <div className="rounded-[28px] border border-[color:var(--border-subtle)] bg-[var(--surface-1)] p-3 shadow-glow">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-3 border-b border-[color:var(--border-subtle)] px-2 pb-3">
-                  <div className="choice-mode-toggle">
-                    <button
-                      className={`choice-mode-button ${choiceMode === "auto" ? "choice-mode-button-active" : ""}`}
-                      onClick={() => setChoiceMode("auto")}
-                      type="button"
-                    >
-                      Auto
-                    </button>
-                    <button
-                      className={`choice-mode-button ${choiceMode === "manual" ? "choice-mode-button-active" : ""}`}
-                      onClick={() => setChoiceMode("manual")}
-                      type="button"
-                    >
-                      Manual
-                    </button>
-                  </div>
-
                   <div className="flex flex-wrap items-center gap-2">
-                    {choiceMode === "manual" ? (
-                      <>
-                        <select
-                          className="choice-select"
-                          onChange={(event) => setManualModelSelection(event.target.value as ModelSelection)}
-                          value={manualModelSelection}
-                        >
-                          {manualModelOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                        <select
-                          className="choice-select"
-                          onChange={(event) => setManualPromptSelection(event.target.value as PromptSelection)}
-                          value={manualPromptSelection}
-                        >
-                          {manualPromptOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                        <select
-                          className="choice-select"
-                          onChange={(event) => setManualWebMode(event.target.value as WebMode)}
-                          value={manualWebMode}
-                        >
-                          {manualWebOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </>
-                    ) : (
-                      <div className="choice-auto-summary">
-                        Backend picks model, prompt, and web search.
-                      </div>
-                    )}
+                    <select
+                      className="choice-select"
+                      onChange={(event) => setManualModelSelection(event.target.value as ModelSelection)}
+                      value={manualModelSelection}
+                    >
+                      {manualModelOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      className="choice-select"
+                      onChange={(event) => setManualPromptSelection(event.target.value as PromptSelection)}
+                      value={manualPromptSelection}
+                    >
+                      {manualPromptOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      className="choice-select"
+                      onChange={(event) => setManualWebMode(event.target.value as WebMode)}
+                      value={manualWebMode}
+                    >
+                      {manualWebOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="text-xs text-[var(--text-secondary)]">
+                    Web stays on by default. Turn it off only when you do not want live sources.
                   </div>
                 </div>
 
@@ -2632,8 +2708,9 @@ function App() {
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-[color:var(--border-subtle)] px-2 pt-3 text-xs text-[var(--text-faint)]">
                   <div className="flex flex-wrap items-center gap-3">
                     <span>Mode: {mode}</span>
-                    <span>Choice: {choiceMode}</span>
-                    <span>Web: {choiceMode === "manual" ? manualWebMode : "auto"}</span>
+                    <span>Model: {manualModelSelection}</span>
+                    <span>Prompt: {manualPromptSelection}</span>
+                    <span>Web: {manualWebMode}</span>
                     <span>Streaming: {isStreaming ? "live" : "idle"}</span>
                     <span>Endpoint: /api/chat/stream</span>
                   </div>

@@ -14,6 +14,7 @@ class LLMModels(Enum):
     GPT_5_MINI = "gpt-5.4-mini"
     GPT_5_NENO = "gpt-5.4-nano"
 
+
 class OpenAILLMService:
     def __init__(self, model_name: str = LLMModels.GPT_4O_MINI.value):
         self.api_key = os.getenv("OPENAI_API_KEY")

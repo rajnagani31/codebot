@@ -4,7 +4,11 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
 
-from bot.application.schema.chat_schema import MessageMetadata, MessageProcessMetadata, ResolvedChoiceConfig
+from bot.application.schema.chat_schema import (
+    MessageMetadata,
+    MessageProcessMetadata,
+    ResolvedChoiceConfig,
+)
 from bot.application.service.web_search_service import WebSearchService
 from bot.workflow.openai_flow.openai_adapter.openai_llm_service import OpenAILLMService
 from bot.workflow.openai_flow.openai_tool.openai_tools import (
@@ -31,13 +35,21 @@ class OpenAIToolGraph:
     ):
         self.resolved_choice = resolved_choice
         self.run_context = run_context
-        self.web_search_service = WebSearchService() if resolved_choice.web_enabled else None
+        self.web_search_service = (
+            WebSearchService() if resolved_choice.web_enabled else None
+        )
         self.tools = build_tools(
-            capabilities=ToolCapabilities(web_search_enabled=resolved_choice.web_enabled),
-            execution_context=ToolExecutionContext(web_search_service=self.web_search_service),
+            capabilities=ToolCapabilities(
+                web_search_enabled=resolved_choice.web_enabled
+            ),
+            execution_context=ToolExecutionContext(
+                web_search_service=self.web_search_service
+            ),
         )
         self.tool_map = {tool.name: tool for tool in self.tools}
-        self.llm = OpenAILLMService(model_name=resolved_choice.model_name).bind_tools(self.tools)
+        self.llm = OpenAILLMService(model_name=resolved_choice.model_name).bind_tools(
+            self.tools
+        )
 
     async def run_stream(
         self,
@@ -53,7 +65,9 @@ class OpenAIToolGraph:
 
         while True:
             streamed_response: AIMessage | None = None
-            async for event in self._stream_llm_events(messages=conversation, previous_context=previous_context):
+            async for event in self._stream_llm_events(
+                messages=conversation, previous_context=previous_context
+            ):
                 if event["type"] == "delta":
                     yield event
                     continue
@@ -64,7 +78,7 @@ class OpenAIToolGraph:
 
             conversation.append(streamed_response)
             tool_calls = list(getattr(streamed_response, "tool_calls", []) or [])
-
+            print(f"Tool calls:--------------------------------- {tool_calls}")
             if not tool_calls:
                 metadata = self._build_metadata(
                     tools_used=tools_used,
@@ -92,13 +106,19 @@ class OpenAIToolGraph:
                     if event.get("sources"):
                         sources = event["sources"]
                         citations = [
-                            {"title": source["title"], "url": source["url"], "rank": source["rank"]}
+                            {
+                                "title": source["title"],
+                                "url": source["url"],
+                                "rank": source["rank"],
+                            }
                             for source in sources
                         ]
                     if event.get("web_search_run_id"):
                         web_search_run_id = event["web_search_run_id"]
 
-    async def _stream_llm_events(self, *, messages: list[BaseMessage], previous_context: str):
+    async def _stream_llm_events(
+        self, *, messages: list[BaseMessage], previous_context: str
+    ):
         accumulated = None
         full_messages = GetSytemInstruction().build_messages(
             messages=messages,
@@ -106,6 +126,7 @@ class OpenAIToolGraph:
             prompt_name=self.resolved_choice.prompt_name,
             web_enabled=self.resolved_choice.web_enabled,
             web_preferred=self.resolved_choice.web_preferred,
+            current_info_requested=self.resolved_choice.current_info_requested,
         )
 
         async for chunk in self.llm._chat_model.astream(full_messages):
@@ -125,6 +146,7 @@ class OpenAIToolGraph:
         tool_args = tool_call.get("args", {})
         try:
             if tool_name == "web_search":
+                # self.web_search_service = None
                 if self.web_search_service is None:
                     raise RuntimeError("Web search is not enabled")
 
@@ -194,7 +216,11 @@ class OpenAIToolGraph:
                 raise KeyError(f"Unknown tool: {tool_name}")
 
             result = await tool.ainvoke(tool_args)
-            content = result if isinstance(result, str) else json.dumps(result, ensure_ascii=True)
+            content = (
+                result
+                if isinstance(result, str)
+                else json.dumps(result, ensure_ascii=True)
+            )
             yield {
                 "type": "tool_result",
                 "tool_name": tool_name,
@@ -243,6 +269,7 @@ class OpenAIToolGraph:
                 execution_mode=execution_mode,
                 tools_used=tools_used,
                 web_search_used=bool(web_tools_used),
+                current_info_requested=self.resolved_choice.current_info_requested,
                 model_name=self.resolved_choice.model_name,
                 prompt_name=self.resolved_choice.prompt_name,
             ),

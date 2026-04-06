@@ -3,6 +3,8 @@
     The system prompt is a crucial component that sets the context and instructions for the LLM's behavior. \
     It can include guidelines, constraints, and any relevant information that helps the LLM generate appropriate responses.\
 """
+
+
 def _build_code_generator_prompt(previous_context):
     return f"""
 You are CodeBot — an expert AI software engineer and CLI coding assistant.
@@ -94,6 +96,7 @@ user_previous_context : ```{previous_context}```
 
 """
 
+
 def _build_code_few_short_prompt(previous_context):
     return f"""
 You are a senior coding agent.
@@ -150,7 +153,6 @@ Context:
 ```{previous_context}```
 
 """
-
 
 
 def _debug_code_step_style(previous_context):
@@ -228,19 +230,21 @@ def _debug_code_step_style(previous_context):
         address: Optional[str]
 """
 
+
 def system_prompt(prompt_type, previous_context):
     prompt = ""
     if prompt_type.value == "code_generator":
         prompt = _build_code_generator_prompt(previous_context)
-    
+
     elif prompt_type.value == "few_short_prompt":
         prompt = _build_code_few_short_prompt(previous_context)
-    
-    elif prompt_type.value== "debug_code_step_style":
+
+    elif prompt_type.value == "debug_code_step_style":
         prompt = _debug_code_step_style(previous_context)
     else:
         return None
-    
+
     return prompt
+
 
 # print(system_prompt("few_short_prompt",previous_context=None))

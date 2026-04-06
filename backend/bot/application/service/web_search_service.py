@@ -32,13 +32,16 @@ class WebSearchService:
     ) -> dict:
         search_payload = await self.provider.search(query, max_results=max_results)
         search_results = list(search_payload.get("results", []))[:max_results]
-        urls = [str(item.get("url") or "") for item in search_results if item.get("url")]
+        urls = [
+            str(item.get("url") or "") for item in search_results if item.get("url")
+        ]
         fetched_pages = await self.content_service.fetch_many(urls)
 
         sources: list[dict] = []
         for item, page in zip(search_results, fetched_pages, strict=False):
             title = str(page.get("title") or item.get("title") or item.get("url") or "")
             content_text = str(page.get("text") or "")
+            content_preview = str(page.get("preview") or "")
             summary = self.content_service.summarize(
                 query=query,
                 title=title,
@@ -50,9 +53,13 @@ class WebSearchService:
                     "rank": int(item.get("rank") or 0),
                     "title": title,
                     "url": str(item.get("url") or ""),
-                    "domain": str(item.get("domain") or urlparse(str(item.get("url") or "")).netloc),
+                    "domain": str(
+                        item.get("domain")
+                        or urlparse(str(item.get("url") or "")).netloc
+                    ),
                     "snippet": str(item.get("snippet") or ""),
                     "summary": summary,
+                    "content_preview": content_preview,
                     "content_text": content_text,
                     "published_at": item.get("published_at"),
                     "status": page.get("status") or "completed",
@@ -65,7 +72,9 @@ class WebSearchService:
             thread_id=thread_id,
             message_id=message_id,
             sources=sources,
-            provider_name=str(search_payload.get("provider") or self.provider.provider_name),
+            provider_name=str(
+                search_payload.get("provider") or self.provider.provider_name
+            ),
         )
 
         return self.build_context_pack(query=query, run_id=run_id, sources=sources)
@@ -83,10 +92,13 @@ class WebSearchService:
             "title": page.get("title") or url,
             "url": url,
             "summary": summary,
+            "content_preview": page.get("preview") or "",
             "content_text": page.get("text") or "",
         }
 
-    def build_context_pack(self, *, query: str, run_id: str, sources: list[dict]) -> dict:
+    def build_context_pack(
+        self, *, query: str, run_id: str, sources: list[dict]
+    ) -> dict:
         source_summaries = [
             {
                 "rank": source["rank"],
@@ -95,6 +107,7 @@ class WebSearchService:
                 "domain": source["domain"],
                 "snippet": source["snippet"],
                 "summary": source["summary"],
+                "content_preview": source["content_preview"],
             }
             for source in sources
         ]
@@ -160,6 +173,7 @@ class WebSearchService:
                         metadata_json={
                             "status": source["status"],
                             "published_at": source.get("published_at"),
+                            "content_preview": source.get("content_preview"),
                         },
                     )
                 )

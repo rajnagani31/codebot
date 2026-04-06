@@ -29,7 +29,6 @@ from ..config import (
 from ..model.chat_history import ChatUser, UserSession
 from ..repository.auth_repository import AuthRepository
 
-
 ACCESS_COOKIE_NAME = "codebot_access_token"
 REFRESH_COOKIE_NAME = "codebot_refresh_token"
 GOOGLE_STATE_TTL_SECONDS = 600
@@ -78,7 +77,9 @@ class AuthService:
         self.repository = repository
         self.secret = secret.encode("utf-8")
 
-    def create_guest_session(self, request: Request, client_session_id: str | None = None) -> SessionTokens:
+    def create_guest_session(
+        self, request: Request, client_session_id: str | None = None
+    ) -> SessionTokens:
         existing = self._resolve_existing_principal(request)
         if existing is not None:
             return self._rotate_existing_session(existing, request)
@@ -110,7 +111,9 @@ class AuthService:
         current = self._resolve_existing_principal(request)
         password_hash = self._hash_password(password)
 
-        if existing_user is not None and (current is None or existing_user.id != current.id):
+        if existing_user is not None and (
+            current is None or existing_user.id != current.id
+        ):
             raise AuthError("Email is already registered")
 
         if current is not None and current.user_type == "guest":
@@ -188,7 +191,9 @@ class AuthService:
         record = self.repository.get_session_user(session_id)
         if record is None:
             raise AuthError("Session not found")
-        self._validate_session(record.session, expected_token=refresh_token, token_kind="refresh")
+        self._validate_session(
+            record.session, expected_token=refresh_token, token_kind="refresh"
+        )
         if record.session.refresh_expires_at < datetime.utcnow():
             raise AuthError("Refresh session expired")
         if not record.user.is_active:
@@ -220,11 +225,12 @@ class AuthService:
             raise AuthError("Token session missing")
 
         record = self.repository.get_session_user(session_id)
-        print("Session record fetched for session_id", session_id, "record:", record)
         if record is None:
             raise AuthError("Session not found")
 
-        self._validate_session(record.session, expected_token=access_token, token_kind="access")
+        self._validate_session(
+            record.session, expected_token=access_token, token_kind="access"
+        )
         if record.session.expires_at < datetime.utcnow():
             raise AuthError("Token expired")
         if not record.user.is_active:
@@ -236,13 +242,20 @@ class AuthService:
         user_for_principal = self.repository.get_user(record.user.id) or record.user
         return self._build_principal(user_for_principal, session_for_principal)
 
-    def consume_chat_credit(self, principal: AuthenticatedPrincipal) -> AuthenticatedPrincipal:
+    def consume_chat_credit(
+        self, principal: AuthenticatedPrincipal
+    ) -> AuthenticatedPrincipal:
         if principal.user_type != "guest":
             return principal
 
-        if principal.guest_message_limit is not None and principal.remaining_guest_messages is not None:
+        if (
+            principal.guest_message_limit is not None
+            and principal.remaining_guest_messages is not None
+        ):
             if principal.remaining_guest_messages <= 0:
-                raise QuotaExceededError("Guest message limit reached. Sign in to continue.")
+                raise QuotaExceededError(
+                    "Guest message limit reached. Sign in to continue."
+                )
 
         session = self.repository.consume_message_credit(principal.session_id)
         if session is None:
@@ -272,9 +285,15 @@ class AuthService:
             "access_type": "offline",
             "prompt": "consent",
         }
-        return True, f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}", None
+        return (
+            True,
+            f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}",
+            None,
+        )
 
-    def login_with_google_callback(self, *, request: Request, code: str, state: str) -> SessionTokens:
+    def login_with_google_callback(
+        self, *, request: Request, code: str, state: str
+    ) -> SessionTokens:
         if not self._google_oauth_enabled():
             raise AuthError("Google OAuth is not configured")
 
@@ -326,7 +345,9 @@ class AuthService:
             existing_session=None,
         )
 
-    def apply_session_cookies(self, response: Response, session_tokens: SessionTokens) -> None:
+    def apply_session_cookies(
+        self, response: Response, session_tokens: SessionTokens
+    ) -> None:
         self._set_cookie(
             response,
             key=ACCESS_COOKIE_NAME,
@@ -391,8 +412,12 @@ class AuthService:
         is_guest: bool,
         existing_session: UserSession | None,
     ) -> SessionTokens:
-        access_expires_at_dt, refresh_expires_at_dt = self._build_expiry_window(is_guest=is_guest)
-        session_id = existing_session.id if existing_session is not None else uuid.uuid4().hex
+        access_expires_at_dt, refresh_expires_at_dt = self._build_expiry_window(
+            is_guest=is_guest
+        )
+        session_id = (
+            existing_session.id if existing_session is not None else uuid.uuid4().hex
+        )
         access_token = self._encode_token(
             {
                 "typ": "access",
@@ -457,10 +482,14 @@ class AuthService:
             user=principal,
         )
 
-    def _build_principal(self, user: ChatUser, session: UserSession) -> AuthenticatedPrincipal:
+    def _build_principal(
+        self, user: ChatUser, session: UserSession
+    ) -> AuthenticatedPrincipal:
         remaining_guest_messages = None
         if session.message_limit is not None:
-            remaining_guest_messages = max(session.message_limit - session.message_count, 0)
+            remaining_guest_messages = max(
+                session.message_limit - session.message_count, 0
+            )
 
         return AuthenticatedPrincipal(
             id=user.id,
@@ -478,16 +507,19 @@ class AuthService:
             remaining_guest_messages=remaining_guest_messages,
         )
 
-    def _resolve_existing_principal(self, request: Request) -> AuthenticatedPrincipal | None:
+    def _resolve_existing_principal(
+        self, request: Request
+    ) -> AuthenticatedPrincipal | None:
         try:
             return self.get_user_from_request(request)
         except AuthError:
             return None
 
     def _extract_access_token(self, request: Request) -> str | None:
-        cookie_token = request.cookies.get(ACCESS_COOKIE_NAME) or request.cookies.get("guest_token")
+        cookie_token = request.cookies.get(ACCESS_COOKIE_NAME) or request.cookies.get(
+            "guest_token"
+        )
         if cookie_token:
-            print("Access token found in cookies", cookie_token)
             return cookie_token
 
         auth_header = request.headers.get("Authorization", "")
@@ -496,7 +528,10 @@ class AuthService:
         return None
 
     def _extract_session_id_from_request(self, request: Request) -> str | None:
-        for token in (self._extract_access_token(request), request.cookies.get(REFRESH_COOKIE_NAME)):
+        for token in (
+            self._extract_access_token(request),
+            request.cookies.get(REFRESH_COOKIE_NAME),
+        ):
             if not token:
                 continue
             try:
@@ -508,16 +543,24 @@ class AuthService:
                 return str(session_id)
         return None
 
-    def _validate_session(self, session: UserSession, *, expected_token: str, token_kind: str) -> None:
+    def _validate_session(
+        self, session: UserSession, *, expected_token: str, token_kind: str
+    ) -> None:
         if not session.is_active or session.revoked_at is not None:
             raise AuthError("Session revoked")
 
         hashed = self._hash_token(expected_token)
-        stored_hash = session.session_token_hash if token_kind == "access" else session.refresh_token_hash
+        stored_hash = (
+            session.session_token_hash
+            if token_kind == "access"
+            else session.refresh_token_hash
+        )
         if not hmac.compare_digest(stored_hash, hashed):
             raise AuthError("Session token invalid")
 
-    def _set_cookie(self, response: Response, *, key: str, value: str, expires_at: int) -> None:
+    def _set_cookie(
+        self, response: Response, *, key: str, value: str, expires_at: int
+    ) -> None:
         max_age = max(expires_at - int(time.time()), 0)
         response.set_cookie(
             key=key,
@@ -533,7 +576,9 @@ class AuthService:
     def _build_expiry_window(self, *, is_guest: bool) -> tuple[datetime, datetime]:
         now = datetime.utcnow()
         if is_guest:
-            refresh_ttl = min(GUEST_SESSION_EXPIRES_SECONDS, REFRESH_TOKEN_EXPIRES_SECONDS)
+            refresh_ttl = min(
+                GUEST_SESSION_EXPIRES_SECONDS, REFRESH_TOKEN_EXPIRES_SECONDS
+            )
             refresh_expires_at = now + timedelta(seconds=refresh_ttl)
             access_ttl = min(ACCESS_TOKEN_EXPIRES_SECONDS, refresh_ttl)
             access_expires_at = now + timedelta(seconds=access_ttl)
@@ -558,7 +603,9 @@ class AuthService:
     def _hash_password(self, password: str) -> str:
         iterations = 260000
         salt = os.urandom(16)
-        digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+        digest = hashlib.pbkdf2_hmac(
+            "sha256", password.encode("utf-8"), salt, iterations
+        )
         return "pbkdf2_sha256${}${}${}".format(
             iterations,
             base64.urlsafe_b64encode(salt).decode("utf-8"),
@@ -575,7 +622,9 @@ class AuthService:
         iterations = int(iterations_str)
         salt = base64.urlsafe_b64decode(salt_b64.encode("utf-8"))
         expected_digest = base64.urlsafe_b64decode(digest_b64.encode("utf-8"))
-        candidate = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+        candidate = hashlib.pbkdf2_hmac(
+            "sha256", password.encode("utf-8"), salt, iterations
+        )
         return hmac.compare_digest(candidate, expected_digest)
 
     def _hash_token(self, token: str) -> str:
@@ -583,8 +632,12 @@ class AuthService:
 
     def _encode_token(self, payload: dict) -> str:
         header = {"alg": "HS256", "typ": "JWT"}
-        encoded_header = self._b64encode(json.dumps(header, separators=(",", ":")).encode("utf-8"))
-        encoded_payload = self._b64encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+        encoded_header = self._b64encode(
+            json.dumps(header, separators=(",", ":")).encode("utf-8")
+        )
+        encoded_payload = self._b64encode(
+            json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        )
         signing_input = f"{encoded_header}.{encoded_payload}".encode("utf-8")
         signature = hmac.new(self.secret, signing_input, hashlib.sha256).digest()
         encoded_signature = self._b64encode(signature)
@@ -597,7 +650,9 @@ class AuthService:
             raise AuthError("Token format invalid") from exc
 
         signing_input = f"{encoded_header}.{encoded_payload}".encode("utf-8")
-        expected_signature = hmac.new(self.secret, signing_input, hashlib.sha256).digest()
+        expected_signature = hmac.new(
+            self.secret, signing_input, hashlib.sha256
+        ).digest()
         actual_signature = self._b64decode(encoded_signature)
         if not hmac.compare_digest(expected_signature, actual_signature):
             raise AuthError("Token signature invalid")

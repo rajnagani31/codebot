@@ -10,19 +10,42 @@ Conversation memory and retrieved context:
 """
 
 
-def _chat_prompt(previous_context: str, web_enabled: bool, web_preferred: bool) -> str:
-    web_block = ""
+def _web_context_guidance(
+    web_enabled: bool, web_preferred: bool, current_info_requested: bool
+) -> str:
     if web_enabled:
         web_block = """
 Web search tools are available.
 - Use `web_search` when the question likely depends on current information or external sources.
 - Use `read_web_page` when a specific URL needs deeper inspection.
 """
-    if web_preferred:
-        web_block += """
-- Prefer current web sources when they would improve accuracy.
-- Cite the sources you used naturally in the answer.
-"""
+#         if web_preferred:
+#             web_block += """
+# - Prefer current web sources when they would improve accuracy.
+# - Cite the sources you used naturally in the answer.
+# """
+#         return web_block
+
+#     if current_info_requested:
+#         return """
+# Web search tools are disabled.
+# - The user appears to want current or latest information.
+# - Do not claim fresh verification from memory alone.
+# - Say clearly that web search is off and ask the user to turn it on for verified current information.
+# """
+
+    return ""
+
+
+def _chat_prompt(
+    previous_context: str,
+    web_enabled: bool,
+    web_preferred: bool,
+    current_info_requested: bool,
+) -> str:
+    web_block = _web_context_guidance(
+        web_enabled, web_preferred, current_info_requested
+    )
 
     return f"""
 You are Codebot, a pragmatic technical assistant.
@@ -37,7 +60,12 @@ Behavior:
 """
 
 
-def _code_prompt(previous_context: str, web_enabled: bool, web_preferred: bool) -> str:
+def _code_prompt(
+    previous_context: str,
+    web_enabled: bool,
+    web_preferred: bool,
+    current_info_requested: bool,
+) -> str:
     return f"""
 You are Codebot, a senior software engineer focused on implementation quality.
 
@@ -48,11 +76,17 @@ Behavior:
 - Highlight assumptions that materially affect correctness.
 - Use tools for file, system, or web context when needed.
 {"- Prefer current web references for package, library, or API questions." if web_preferred else ""}
+{"- If the user wants current package, version, or API details and web search is off, say that current verification needs web search." if current_info_requested and not web_enabled else ""}
 {_shared_context(previous_context)}
 """
 
 
-def _debug_prompt(previous_context: str, web_enabled: bool, web_preferred: bool) -> str:
+def _debug_prompt(
+    previous_context: str,
+    web_enabled: bool,
+    web_preferred: bool,
+    current_info_requested: bool,
+) -> str:
     return f"""
 You are Codebot in debugging mode.
 
@@ -62,11 +96,17 @@ Behavior:
 - Give a concrete fix path and mention edge cases.
 - Use available tools to verify assumptions when possible.
 {"- Prefer web lookup for current framework behavior, versions, or error changes." if web_preferred else ""}
+{"- If the user needs current framework or platform behavior and web search is off, say that verification is limited until web search is enabled." if current_info_requested and not web_enabled else ""}
 {_shared_context(previous_context)}
 """
 
 
-def _review_prompt(previous_context: str, web_enabled: bool, web_preferred: bool) -> str:
+def _review_prompt(
+    previous_context: str,
+    web_enabled: bool,
+    web_preferred: bool,
+    current_info_requested: bool,
+) -> str:
     return f"""
 You are Codebot in code review mode.
 
@@ -76,11 +116,17 @@ Behavior:
 - Mention missing tests when relevant.
 - Use tools when direct inspection or current documentation would improve confidence.
 {"- Prefer web references if the review depends on current library behavior or platform rules." if web_preferred else ""}
+{"- If the review depends on current library or platform rules and web search is off, state that the review is limited to local context and memory." if current_info_requested and not web_enabled else ""}
 {_shared_context(previous_context)}
 """
 
 
-def _web_research_prompt(previous_context: str, web_enabled: bool, web_preferred: bool) -> str:
+def _web_research_prompt(
+    previous_context: str,
+    web_enabled: bool,
+    web_preferred: bool,
+    current_info_requested: bool,
+) -> str:
     return f"""
 You are Codebot in web research mode.
 
@@ -94,7 +140,7 @@ Behavior:
 """
 
 
-PROMPT_BUILDERS: dict[str, Callable[[str, bool, bool], str]] = {
+PROMPT_BUILDERS: dict[str, Callable[[str, bool, bool, bool], str]] = {
     "chat": _chat_prompt,
     "code": _code_prompt,
     "debug": _debug_prompt,
@@ -109,6 +155,12 @@ def build_system_prompt(
     previous_context: str = "",
     web_enabled: bool = False,
     web_preferred: bool = False,
+    current_info_requested: bool = False,
 ) -> str:
     builder = PROMPT_BUILDERS.get(prompt_name, _chat_prompt)
-    return builder(previous_context, web_enabled, web_preferred).strip()
+    return builder(
+        previous_context,
+        web_enabled,
+        web_preferred,
+        current_info_requested,
+    ).strip()
