@@ -63,13 +63,21 @@ class OpenAIToolGraph:
         citations: list[dict[str, Any]] = []
         web_search_run_id: str | None = None
 
+        print("Exiting tool graph run loop")
+        print("conversation",conversation)
+        print("tools_used", tools_used)
+        print("sources", sources)
+        print("citations", citations)
+        print("web_search_run_id", web_search_run_id)
+
         while True:
             streamed_response: AIMessage | None = None
             async for event in self._stream_llm_events(
                 messages=conversation, previous_context=previous_context
             ):
-                if event["type"] == "delta":
+                if event["type"] == "delta": # Each streamed chunk is a delta update to the LLM response
                     yield event
+                    print(f"Delta received: {event['delta']}")
                     continue
                 streamed_response = event["response"]
 
@@ -90,17 +98,21 @@ class OpenAIToolGraph:
                     "type": "complete",
                     "metadata": metadata,
                 }
+                print(f"LLM response complete with metadata: {metadata}")
                 return
 
             for tool_call in tool_calls:
                 async for event in self._execute_tool_call_events(tool_call):
-                    if event["type"] == "progress":
+                    if event["type"] == "progress": # Before/during tool execution, we can yield progress updates
                         yield event
+                        print(f"Tool call progress: {event['stage']} - {event['label']}")
                         continue
 
                     tool_message = event["tool_message"]
+                    print(f"Tool call result for {event['tool_name']}: {tool_message.content}")
                     conversation.append(tool_message)
                     tool_name = event["tool_name"]
+                    print(f"Tool used: {tool_name}")
                     tools_used.append(tool_name)
 
                     if event.get("sources"):
@@ -113,8 +125,11 @@ class OpenAIToolGraph:
                             }
                             for source in sources
                         ]
+                        print(f"Sources updated: {sources}")
                     if event.get("web_search_run_id"):
                         web_search_run_id = event["web_search_run_id"]
+
+            
 
     async def _stream_llm_events(
         self, *, messages: list[BaseMessage], previous_context: str
@@ -147,8 +162,8 @@ class OpenAIToolGraph:
         try:
             if tool_name == "web_search":
                 # self.web_search_service = None
-                if self.web_search_service is None:
-                    raise RuntimeError("Web search is not enabled")
+                # if self.web_search_service is None:
+                #     raise RuntimeError("Web search is not enabled")
 
                 query = str(tool_args.get("query") or "")
                 yield {
@@ -278,3 +293,16 @@ class OpenAIToolGraph:
             web_search_run_id=web_search_run_id,
         )
         return metadata.model_dump()
+
+
+"""
+web tools error and bugs from Openaitoolgraph
+
+1. we use flow name in _build metadata function, here we use "langgraph_agent_flow" but this lanngraph flow is old version, so now no need to use this flow name.
+2. agent_with_web_search_flow : This flow name is bi confusing beacuse this flow connect with lannggraph but we already remove langgraph flow so no nees this flow name
+3. web_search_flow and llm_only_flow this tool flow is good but here need check our llm codeflow and make any two name for flow beacause we only use only web search tool and openai power.
+
+one more bugg I see our web search url is good
+but Llm don't call to read web page on all url, so we need to check our read web page tool and make sure this tool call on all url which we get from web search result if when need.
+
+"""

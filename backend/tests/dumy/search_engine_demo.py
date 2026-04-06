@@ -11,7 +11,7 @@ from bot.workflow.web.providers.duckduckgo_provider import DuckDuckGoSearchProvi
 
 
 async def main():
-    query = "what is today in india?"
+    query = "give me deatil information about yesterday ipl match?"
     provider = DuckDuckGoSearchProvider()
     content_service = WebContentService()
 

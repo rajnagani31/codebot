@@ -1253,19 +1253,6 @@ function TableBlockContent({ headers, rows }: { headers: string[]; rows: string[
   );
 }
 
-function SourcePreviewContent({ content }: { content: string }) {
-  const blocks = useMemo(() => parseContentBlocks(content), [content]);
-
-  if (!blocks.length) {
-    return <p className="source-card-summary">{content}</p>;
-  }
-
-  return (
-    <div className="source-card-preview">
-      <MarkdownBlocksContent blocks={blocks} />
-    </div>
-  );
-}
 
 function SourceCards({ sources }: { sources: SourceSummary[] }) {
   if (!sources.length) {
@@ -1273,26 +1260,26 @@ function SourceCards({ sources }: { sources: SourceSummary[] }) {
   }
 
   return (
-    <section className="source-card-stack">
+    <div className="source-chips">
       {sources.map((source) => (
-        <article className="source-card" key={`${source.rank}-${source.url}`}>
-          <div className="source-card-header">
-            <span className="source-card-rank">{String(source.rank).padStart(2, "0")}</span>
-            <span className="source-card-domain">{source.domain}</span>
-          </div>
-          <a
-            className="source-card-title"
-            href={source.url}
-            rel="noreferrer"
-            target="_blank"
-          >
-            {source.title}
-          </a>
-          <p className="source-card-summary">{source.summary || source.snippet}</p>
-          {source.content_preview?.trim() ? <SourcePreviewContent content={source.content_preview} /> : null}
-        </article>
+        <a
+          className="source-chip"
+          href={source.url}
+          key={`${source.rank}-${source.url}`}
+          rel="noreferrer"
+          target="_blank"
+          title={source.title}
+        >
+          <img
+            alt=""
+            className="source-chip-favicon"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            src={`https://www.google.com/s2/favicons?domain=${source.domain}&sz=32`}
+          />
+          <span className="source-chip-domain">{source.domain}</span>
+        </a>
       ))}
-    </section>
+    </div>
   );
 }
 
@@ -1370,11 +1357,38 @@ function App() {
       headers.set("Authorization", `Bearer ${accessToken}`);
     }
 
-    return fetch(input, {
+    const response = await fetch(input, {
       ...init,
       headers,
       credentials: "include",
     });
+
+    if (response.status === 401 && !String(input).includes("/api/auth/")) {
+      try {
+        const refreshResponse = await fetch("/api/auth/refresh", {
+          method: "POST",
+          credentials: "include",
+        });
+
+        if (refreshResponse.ok) {
+          const session = (await refreshResponse.json()) as AuthSessionResponse;
+          storeAccessToken(session.access_token);
+
+          const retryHeaders = new Headers(init?.headers);
+          retryHeaders.set("Authorization", `Bearer ${session.access_token}`);
+
+          return fetch(input, {
+            ...init,
+            headers: retryHeaders,
+            credentials: "include",
+          });
+        }
+      } catch {
+        // refresh failed, return original 401 response
+      }
+    }
+
+    return response;
   };
 
   const loadThreadsFromApi = async (preferredThreadId?: string | null) => {
@@ -1553,6 +1567,35 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!sessionUser) {
+      return;
+    }
+
+    const REFRESH_INTERVAL = 4 * 60 * 1000; // 4 minutes
+
+    const refreshToken = async () => {
+      try {
+        const response = await authFetch("/api/auth/refresh", {
+          method: "POST",
+        });
+
+        if (response.ok) {
+          const session = (await response.json()) as AuthSessionResponse;
+          storeAccessToken(session.access_token);
+        }
+      } catch {
+        // silent fail - will retry next interval
+      }
+    };
+
+    const intervalId = window.setInterval(() => void refreshToken(), REFRESH_INTERVAL);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [sessionUser]);
+
+  useEffect(() => {
     window.localStorage.setItem(THEME_STORAGE_KEY, theme);
     document.documentElement.dataset.theme = theme;
   }, [theme]);
@@ -1658,7 +1701,8 @@ function App() {
     }
 
     const thread = (await response.json()) as ThreadSummaryResponse;
-    setThreads((current) => mergeThreads(current, [thread]));
+    const newThread = mapThreadSummary(thread);
+    setThreads((current) => [newThread, ...current]);
     setActiveThreadId(thread.id);
     return thread.id;
   };
@@ -2272,72 +2316,82 @@ function App() {
             )}
           </div>
 
-          <div className="mt-4 space-y-3">
-            <button
-              className="flex w-full items-center justify-between rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] px-4 py-3 text-left transition hover:bg-[var(--surface-3)]"
-              onClick={() => setIsSettingsOpen((current) => !current)}
-              type="button"
-            >
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-faint)]">Sidebar settings</p>
-                <p className="mt-1 text-sm font-medium text-[var(--text-primary)]">Theme and account</p>
-              </div>
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-1)] text-[var(--text-secondary)]">
-                <SettingsIcon />
-              </span>
-            </button>
-
-            {isSettingsOpen ? (
-              <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--surface-1)] p-4">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-faint)]">Theme</p>
-                  <div className="mt-3 grid gap-2">
-                    {themeOptions.map((option) => (
-                      <button
-                        className={`rounded-2xl border px-3 py-3 text-left transition ${
-                          theme === option.value
-                            ? "border-[color:var(--theme-ring)] bg-[var(--theme-active-bg)]"
-                            : "border-[color:var(--border-subtle)] bg-[var(--surface-2)] hover:bg-[var(--surface-3)]"
-                        }`}
-                        key={option.value}
-                        onClick={() => setTheme(option.value)}
-                        type="button"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-medium text-[var(--text-primary)]">{option.label}</p>
-                            <p className="mt-1 text-xs text-[var(--text-secondary)]">{option.description}</p>
-                          </div>
-                          <span
-                            aria-hidden="true"
-                            className="h-4 w-4 rounded-full border border-[color:var(--border-subtle)]"
-                            style={{ background: `var(--theme-preview-${option.value})` }}
-                          />
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+          <div className="mt-4 space-y-2">
+            <div className="relative">
+              <button
+                className="flex w-full items-center gap-3 rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] px-4 py-3 text-left transition hover:bg-[var(--surface-3)]"
+                onClick={() => setIsSettingsOpen((current) => !current)}
+                type="button"
+              >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--surface-3)] text-sm font-semibold text-[var(--text-primary)]">
+                  {sessionUser
+                    ? (sessionUser.displayName || sessionUser.email || "U").charAt(0).toUpperCase()
+                    : "?"}
                 </div>
-
-                <div className="mt-5">
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-faint)]">Account</p>
-                  <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                    {isGuestSession
-                      ? "Create an account or log in to keep your chats outside the guest session."
-                      : "You are signed in. Logout returns the app to a guest session."}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-[var(--text-primary)]">
+                    {sessionUser
+                      ? sessionUser.displayName || sessionUser.email || "Guest"
+                      : isBootstrapping
+                        ? "Connecting..."
+                        : "Unavailable"}
                   </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  {sessionUser?.userType === "guest" && sessionUser.remainingGuestMessages !== null ? (
+                    <p className="text-xs text-[var(--accent-text)]">
+                      {sessionUser.remainingGuestMessages} messages left
+                    </p>
+                  ) : null}
+                </div>
+                <span className={`text-[var(--text-faint)] transition ${isSettingsOpen ? "rotate-180" : ""}`}>
+                  <ChevronIcon />
+                </span>
+              </button>
+
+              {isSettingsOpen ? (
+                <div className="mt-2 rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--surface-1)] p-3">
+                  <div className="space-y-1">
+                    <button
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-[var(--text-primary)] transition hover:bg-[var(--surface-2)]"
+                      onClick={() => {/* personalization placeholder */}}
+                      type="button"
+                    >
+                      <SettingsIcon />
+                      <span>Personalization</span>
+                    </button>
+
+                    <div className="px-3 py-2">
+                      <p className="mb-2 text-xs uppercase tracking-[0.15em] text-[var(--text-faint)]">Theme</p>
+                      <div className="flex gap-2">
+                        {themeOptions.map((option) => (
+                          <button
+                            className={`flex-1 rounded-xl border px-2 py-2 text-center text-xs font-medium transition ${
+                              theme === option.value
+                                ? "border-[color:var(--theme-ring)] bg-[var(--theme-active-bg)] text-[var(--text-primary)]"
+                                : "border-[color:var(--border-subtle)] bg-[var(--surface-2)] text-[var(--text-secondary)] hover:bg-[var(--surface-3)]"
+                            }`}
+                            key={option.value}
+                            onClick={() => setTheme(option.value)}
+                            type="button"
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="my-1 border-t border-[color:var(--border-soft)]" />
+
                     {isGuestSession ? (
                       <>
                         <button
-                          className="rounded-xl bg-[var(--button-primary-bg)] px-3 py-2 text-xs font-semibold text-[var(--button-primary-text)] transition hover:opacity-90"
+                          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-[var(--text-primary)] transition hover:bg-[var(--surface-2)]"
                           onClick={() => openAuthDialog("signup")}
                           type="button"
                         >
                           Sign up
                         </button>
                         <button
-                          className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] px-3 py-2 text-xs font-semibold text-[var(--text-primary)] transition hover:bg-[var(--surface-3)]"
+                          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-[var(--text-primary)] transition hover:bg-[var(--surface-2)]"
                           onClick={() => openAuthDialog("login")}
                           type="button"
                         >
@@ -2346,7 +2400,7 @@ function App() {
                       </>
                     ) : (
                       <button
-                        className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] px-3 py-2 text-xs font-semibold text-[var(--text-primary)] transition hover:bg-[var(--surface-3)]"
+                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-[var(--danger-text)] transition hover:bg-[var(--surface-2)]"
                         onClick={() => void handleLogout()}
                         type="button"
                       >
@@ -2355,58 +2409,8 @@ function App() {
                     )}
                   </div>
                 </div>
-              </div>
-            ) : null}
-
-            <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] p-4">
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-faint)]">Session</p>
-            <p className="mt-2 text-sm font-medium text-[var(--text-primary)]">
-              {sessionUser
-                ? sessionUser.displayName || sessionUser.email || `User ${sessionUser.id}`
-                : isBootstrapping
-                  ? "Connecting..."
-                  : "Unavailable"}
-            </p>
-            <p className="mt-1 text-xs text-[var(--text-secondary)]">
-              {sessionUser
-                ? `${sessionUser.userType} via ${sessionUser.authProvider} • session ${sessionUser.sessionLabel}`
-                : "Database-backed authenticated chat history."}
-            </p>
-            {sessionUser?.userType === "guest" && sessionUser.remainingGuestMessages !== null ? (
-              <p className="mt-2 text-xs text-[var(--accent-text)]">
-                Free guest messages left: {sessionUser.remainingGuestMessages}
-              </p>
-            ) : null}
-            <div className="mt-3 flex flex-wrap gap-2">
-              {isGuestSession ? (
-                <>
-                  <button
-                    className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-0)] px-3 py-2 text-xs font-medium text-[var(--text-primary)] transition hover:bg-[var(--surface-3)]"
-                    onClick={() => openAuthDialog("signup")}
-                    type="button"
-                  >
-                    Create account
-                  </button>
-                  <button
-                    className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-0)] px-3 py-2 text-xs font-medium text-[var(--text-primary)] transition hover:bg-[var(--surface-3)]"
-                    onClick={() => openAuthDialog("login")}
-                    type="button"
-                  >
-                    Login
-                  </button>
-                </>
-              ) : null}
-              {sessionUser && !isGuestSession ? (
-                <button
-                  className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-0)] px-3 py-2 text-xs font-medium text-[var(--text-primary)] transition hover:bg-[var(--surface-3)]"
-                  onClick={() => void handleLogout()}
-                  type="button"
-                >
-                  Logout
-                </button>
               ) : null}
             </div>
-          </div>
           </div>
         </div>
       </aside>
@@ -2460,48 +2464,19 @@ function App() {
 
       <main className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
         <header className="shrink-0 border-b border-[color:var(--border-subtle)] bg-[var(--header-bg)] backdrop-blur">
-          <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
-            <div>
-              <p className="text-xs uppercase tracking-[0.26em] text-[var(--text-faint)]">Codebot workspace</p>
-              <h1 className="mt-1 text-lg font-semibold text-[var(--text-primary)]">Chat interface</h1>
-            </div>
-
+          <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
             <div className="flex items-center gap-3">
               <button
-                className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-secondary)] transition hover:bg-[var(--surface-3)] lg:hidden"
-                onClick={startFreshChat}
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] text-[var(--text-secondary)] transition hover:bg-[var(--surface-3)] lg:hidden"
+                onClick={() => setIsSidebarOpen(true)}
                 type="button"
               >
-                New chat
+                <SidebarToggleIcon />
               </button>
+              <h1 className="text-base font-semibold text-[var(--text-primary)]">Codebot</h1>
+            </div>
 
-              {isGuestSession ? (
-                <>
-                  <button
-                    className="hidden rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] transition hover:bg-[var(--surface-3)] sm:inline-flex"
-                    onClick={() => openAuthDialog("login")}
-                    type="button"
-                  >
-                    Login
-                  </button>
-                  <button
-                    className="hidden rounded-xl bg-[var(--button-primary-bg)] px-3 py-2 text-sm font-semibold text-[var(--button-primary-text)] transition hover:opacity-90 sm:inline-flex"
-                    onClick={() => openAuthDialog("signup")}
-                    type="button"
-                  >
-                    Sign up
-                  </button>
-                </>
-              ) : (
-                <button
-                  className="hidden rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] transition hover:bg-[var(--surface-3)] sm:inline-flex"
-                  onClick={() => void handleLogout()}
-                  type="button"
-                >
-                  Logout
-                </button>
-              )}
-
+            <div className="flex items-center gap-2">
               <select
                 className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none transition hover:bg-[var(--surface-3)]"
                 onChange={(event) => setMode(event.target.value as ChatMode)}
@@ -2520,16 +2495,6 @@ function App() {
               >
                 {showCodeContext ? "Hide code" : "Add code"}
               </button>
-
-              {sessionUser?.userType === "guest" ? (
-                <button
-                  className="rounded-xl border border-[color:var(--accent-border)] bg-[var(--accent-bg)] px-3 py-2 text-sm text-[var(--accent-text)] transition hover:opacity-90"
-                  onClick={() => openAuthDialog("signup")}
-                  type="button"
-                >
-                  Upgrade
-                </button>
-              ) : null}
             </div>
           </div>
         </header>
@@ -2552,7 +2517,7 @@ function App() {
                         key={message.id}
                       >
                         {message.role === "user" ? (
-                          <section className="max-w-[70%] rounded-[28px] bg-[var(--user-bubble-bg)] px-5 py-3 text-right shadow-lg">
+                          <section className="max-w-[70%] rounded-[28px] bg-[var(--user-bubble-bg)] px-5 py-3 shadow-lg">
                             <div className="message-content text-sm leading-7 text-[var(--user-bubble-text)]">
                               {message.content}
                             </div>
@@ -2705,15 +2670,7 @@ function App() {
                   )}
                 </div>
 
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-[color:var(--border-subtle)] px-2 pt-3 text-xs text-[var(--text-faint)]">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span>Mode: {mode}</span>
-                    <span>Model: {manualModelSelection}</span>
-                    <span>Prompt: {manualPromptSelection}</span>
-                    <span>Web: {manualWebMode}</span>
-                    <span>Streaming: {isStreaming ? "live" : "idle"}</span>
-                    <span>Endpoint: /api/chat/stream</span>
-                  </div>
+                <div className="mt-2 px-2 text-right text-xs text-[var(--text-faint)]">
                   <span>Enter to send, Shift+Enter for newline</span>
                 </div>
               </div>
@@ -2805,6 +2762,14 @@ function CopyIcon() {
         strokeLinecap="round"
         strokeWidth="1.8"
       />
+    </svg>
+  );
+}
+
+function ChevronIcon() {
+  return (
+    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
+      <path d="M6 9L12 15L18 9" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
     </svg>
   );
 }
