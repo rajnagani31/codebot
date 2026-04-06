@@ -162,8 +162,8 @@ class OpenAIToolGraph:
         try:
             if tool_name == "web_search":
                 # self.web_search_service = None
-                # if self.web_search_service is None:
-                #     raise RuntimeError("Web search is not enabled")
+                if self.web_search_service is None:
+                    raise RuntimeError("Web search is not enabled")
 
                 query = str(tool_args.get("query") or "")
                 yield {
@@ -269,11 +269,11 @@ class OpenAIToolGraph:
         web_tools_used = [name for name in tools_used if name in web_tools]
 
         if web_tools_used and non_web_tools_used:
-            execution_mode = "agent_with_web_search_flow"
+            execution_mode = "tool_with_web_search_flow"
         elif web_tools_used:
             execution_mode = "web_search_flow"
         elif non_web_tools_used:
-            execution_mode = "langgraph_agent_flow"
+            execution_mode = "tool_flow"
         else:
             execution_mode = "llm_only_flow"
 
@@ -296,13 +296,22 @@ class OpenAIToolGraph:
 
 
 """
-web tools error and bugs from Openaitoolgraph
+web search bugs and errors
 
-1. we use flow name in _build metadata function, here we use "langgraph_agent_flow" but this lanngraph flow is old version, so now no need to use this flow name.
-2. agent_with_web_search_flow : This flow name is bi confusing beacuse this flow connect with lannggraph but we already remove langgraph flow so no nees this flow name
-3. web_search_flow and llm_only_flow this tool flow is good but here need check our llm codeflow and make any two name for flow beacause we only use only web search tool and openai power.
+when user ask about current and latest infomation when everything is hardecoded
+-> uls featch only 3 it's good for low leavel
+-> each url read whole web page and return 1600 chars
+-> simple text truncation to 420 chars (NOT -AI powered)
 
-one more bugg I see our web search url is good
-but Llm don't call to read web page on all url, so we need to check our read web page tool and make sure this tool call on all url which we get from web search result if when need.
 
+approch to solve this problem
+1. web search -> page reader -> is normal resgining
+2. web search -> llm -> decide to need read web page or not -> if need then call read web page tool with url -> page reader -> return data to llm 
+3. page reader service for eacha nd specific url -> it's pretiy good for current time
+
+Note : specific and via web search we use rendem fix char length but, what be apply for use all data from each urls and user can talk about this specific data, 
+so we need to read whole page and then summarize with ai and return this summary to llm and also return whole text in tool message for future use if user want to talk about this specific data.
+
+
+==> change current flow matadeta name not need to change in UI and databse beacuse is a metadata.
 """
