@@ -6,3 +6,19 @@ __pycache__
 *.pyo
 *.pyd
 .env
+.env.*
+!.env.example
+
+# Frontend (built separately)
+frontend/
+
+# IDE / OS
+.vscode
+.idea
+*.swp
+.DS_Store
+
+# Docs
+*.md
+!README.md
+LICENSE

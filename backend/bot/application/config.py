@@ -17,7 +17,7 @@ load_dotenv(PROJECT_ROOT / ".env", override=False)
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+psycopg2://postgres:postgres@localhost/pgvector",
+    "postgresql+psycopg2://postgres:postgres@localhost/codebot",
 )
 JWT_SECRET = os.getenv("JWT_SECRET", "codebot-dev-jwt-secret")
 ACCESS_TOKEN_EXPIRES_SECONDS = int(os.getenv("ACCESS_TOKEN_EXPIRES_SECONDS", str(60 * 15)))

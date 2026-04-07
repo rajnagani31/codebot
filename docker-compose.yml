@@ -1,55 +1,91 @@
 services:
-  app:
+
+  # ── PostgreSQL (+ pgvector extension) ────────────────────────
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: codebot-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: codebot
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Valkey (Redis-compatible cache / pub-sub) ──────────────────
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: codebot-valkey
+    # No host port — only backend needs access (via Docker network)
+    # Uncomment to debug from host: ports: ["6380:6379"]
+    volumes:
+      - valkey_data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Qdrant (vector database) ───────────────────────────────────
+  vector_db:
+    image: qdrant/qdrant:v1.13.2
+    container_name: codebot-qdrant
+    # No host port — only backend needs access (via Docker network)
+    # Uncomment to debug from host: ports: ["6333:6333"]
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
+  # ── Backend (FastAPI + uvicorn) ────────────────────────────────
+  backend:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: codebot-app
+    container_name: codebot-backend
     env_file:
       - .env
     environment:
+      # Override localhost defaults to point at Docker service names
+      DATABASE_URL: postgresql+psycopg2://postgres:postgres@db:5432/codebot
       VALKEY_HOST: valkey
       VALKEY_PORT: "6379"
       QDRANT_HOST: vector_db
       QDRANT_PORT: "6333"
       QDRANT_URL: http://vector_db:6333
+      AUTO_CREATE_SCHEMA: "true"
+      FRONTEND_BASE_URL: http://localhost:3000
     depends_on:
-      - valkey
-      - vector_db
+      db:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      vector_db:
+        condition: service_started
     ports:
       - "8000:8000"
     restart: unless-stopped
 
-  valkey:
-    image: valkey/valkey
-    container_name: codebot-valkey
+  # ── Frontend (React + nginx) ───────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: codebot-frontend
+    depends_on:
+      - backend
     ports:
-      - "6379:6379"
-    volumes:
-      - valkey_data:/data
-    restart: unless-stopped
-
-  vector_db:
-    image: qdrant/qdrant
-    container_name: codebot-qdrant
-    ports:
-      - "6333:6333"
-    volumes:
-      - qdrant_data:/qdrant/storage
+      - "3000:80"
     restart: unless-stopped
 
 volumes:
+  pg_data:
   valkey_data:
   qdrant_data:
-
-
-# services:
-#   valkey:
-#     image: valkey/valkey
-#     ports:
-#       - 6379:6379
-
-
-#   vector_db:
-#     image: qdrant/qdrant
-#     ports:
-#       - 6333:6333
