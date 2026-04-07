@@ -19,20 +19,20 @@ Web search tools are available.
 - Use `web_search` when the question likely depends on current information or external sources.
 - Use `read_web_page` when a specific URL needs deeper inspection.
 """
-#         if web_preferred:
-#             web_block += """
-# - Prefer current web sources when they would improve accuracy.
-# - Cite the sources you used naturally in the answer.
-# """
-#         return web_block
+        if web_preferred:
+            web_block += """
+- Prefer current web sources when they would improve accuracy.
+- Cite the sources you used naturally in the answer.
+"""
+        return web_block
 
-#     if current_info_requested:
-#         return """
-# Web search tools are disabled.
-# - The user appears to want current or latest information.
-# - Do not claim fresh verification from memory alone.
-# - Say clearly that web search is off and ask the user to turn it on for verified current information.
-# """
+    if current_info_requested:
+        return """
+Web search tools are disabled.
+- The user appears to want current or latest information.
+- Do not claim fresh verification from memory alone.
+- Say clearly that web search is off and ask the user to turn it on for verified current information.
+"""
 
     return ""
 

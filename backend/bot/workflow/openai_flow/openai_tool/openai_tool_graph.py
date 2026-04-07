@@ -63,13 +63,21 @@ class OpenAIToolGraph:
         citations: list[dict[str, Any]] = []
         web_search_run_id: str | None = None
 
+        print("Exiting tool graph run loop")
+        print("conversation",conversation)
+        print("tools_used", tools_used)
+        print("sources", sources)
+        print("citations", citations)
+        print("web_search_run_id", web_search_run_id)
+
         while True:
             streamed_response: AIMessage | None = None
             async for event in self._stream_llm_events(
                 messages=conversation, previous_context=previous_context
             ):
-                if event["type"] == "delta":
+                if event["type"] == "delta": # Each streamed chunk is a delta update to the LLM response
                     yield event
+                    print(f"Delta received: {event['delta']}")
                     continue
                 streamed_response = event["response"]
 
@@ -90,17 +98,21 @@ class OpenAIToolGraph:
                     "type": "complete",
                     "metadata": metadata,
                 }
+                print(f"LLM response complete with metadata: {metadata}")
                 return
 
             for tool_call in tool_calls:
                 async for event in self._execute_tool_call_events(tool_call):
-                    if event["type"] == "progress":
+                    if event["type"] == "progress": # Before/during tool execution, we can yield progress updates
                         yield event
+                        print(f"Tool call progress: {event['stage']} - {event['label']}")
                         continue
 
                     tool_message = event["tool_message"]
+                    print(f"Tool call result for {event['tool_name']}: {tool_message.content}")
                     conversation.append(tool_message)
                     tool_name = event["tool_name"]
+                    print(f"Tool used: {tool_name}")
                     tools_used.append(tool_name)
 
                     if event.get("sources"):
@@ -113,8 +125,11 @@ class OpenAIToolGraph:
                             }
                             for source in sources
                         ]
+                        print(f"Sources updated: {sources}")
                     if event.get("web_search_run_id"):
                         web_search_run_id = event["web_search_run_id"]
+
+            
 
     async def _stream_llm_events(
         self, *, messages: list[BaseMessage], previous_context: str
@@ -254,11 +269,11 @@ class OpenAIToolGraph:
         web_tools_used = [name for name in tools_used if name in web_tools]
 
         if web_tools_used and non_web_tools_used:
-            execution_mode = "agent_with_web_search_flow"
+            execution_mode = "tool_with_web_search_flow"
         elif web_tools_used:
             execution_mode = "web_search_flow"
         elif non_web_tools_used:
-            execution_mode = "langgraph_agent_flow"
+            execution_mode = "tool_flow"
         else:
             execution_mode = "llm_only_flow"
 
@@ -278,3 +293,25 @@ class OpenAIToolGraph:
             web_search_run_id=web_search_run_id,
         )
         return metadata.model_dump()
+
+
+"""
+web search bugs and errors
+
+when user ask about current and latest infomation when everything is hardecoded
+-> uls featch only 3 it's good for low leavel
+-> each url read whole web page and return 1600 chars
+-> simple text truncation to 420 chars (NOT -AI powered)
+
+
+approch to solve this problem
+1. web search -> page reader -> is normal resgining
+2. web search -> llm -> decide to need read web page or not -> if need then call read web page tool with url -> page reader -> return data to llm 
+3. page reader service for eacha nd specific url -> it's pretiy good for current time
+
+Note : specific and via web search we use rendem fix char length but, what be apply for use all data from each urls and user can talk about this specific data, 
+so we need to read whole page and then summarize with ai and return this summary to llm and also return whole text in tool message for future use if user want to talk about this specific data.
+
+
+==> change current flow matadeta name not need to change in UI and databse beacuse is a metadata.
+"""

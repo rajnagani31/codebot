@@ -82,7 +82,8 @@ class ChatService:
 
         pg_vector_service = PGVectorService()
         # Qdrant_vector_service = QdrantVectorService()
-        history = pg_vector_service.search(user_id=user_id, query=query)
+        # history = pg_vector_service.search(user_id=user_id, query=query)
+        history = "nothing to compere" # TODO: re-enable retrieval after vector search is optimized
         llm_messages = self._build_llm_messages(previous_messages, query)
 
         return ChatStreamContext(
