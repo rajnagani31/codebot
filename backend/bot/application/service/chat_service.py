@@ -80,10 +80,17 @@ class ChatService:
             metadata_json=assistant_metadata,
         )
 
-        pg_vector_service = PGVectorService()
+        # --- Vector retrieval disabled for this version ---
+        # Semantic search context (PGVector / Qdrant) is intentionally
+        # turned off until the retrieval pipeline is optimized.
+        # Do NOT remove the imports or finalize_stream storage logic;
+        # they will be re-enabled in a future version.
+
+
+        # pg_vector_service = PGVectorService()
         # Qdrant_vector_service = QdrantVectorService()
-        # history = pg_vector_service.search(user_id=user_id, query=query)
-        history = "nothing to compere" # TODO: re-enable retrieval after vector search is optimized
+        previous_context = ""
+
         llm_messages = self._build_llm_messages(previous_messages, query)
 
         return ChatStreamContext(
@@ -91,7 +98,7 @@ class ChatService:
             user_message=user_message,
             assistant_message=assistant_message,
             llm_messages=llm_messages,
-            previous_context="\n".join(history),
+            previous_context=previous_context,
         )
 
     def finalize_stream(
