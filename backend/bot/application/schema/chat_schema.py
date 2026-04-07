@@ -1,14 +1,14 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-ChatMode = Literal["chat", "code", "debug", "review"]
+ChatMode = Literal["general", "code", "debug", "review"]
 UserType = Literal["guest", "registered"]
 ChoiceMode = Literal["auto", "manual"]
 SelectorMode = Literal["auto", "manual"]
 WebMode = Literal["off", "auto", "on"]
-PromptName = Literal["chat", "code", "debug", "review", "web_research"]
+PromptName = Literal["general", "code", "debug", "review", "web_research"]
 ModelName = Literal["gpt-4o-mini", "gpt-4o", "gpt-5", "gpt-5.4-mini"]
 
 
@@ -118,8 +118,13 @@ class GoogleLoginUrlResponse(BaseModel):
 
 class CreateThreadRequest(BaseModel):
     title: str
-    mode: ChatMode = "chat"
+    mode: ChatMode = "general"
     client_session_id: str | None = None
+
+    @field_validator("mode", mode="before")
+    @classmethod
+    def _normalize_legacy_mode(cls, v: str) -> str:
+        return "general" if v == "chat" else v
 
 
 class ThreadSummaryResponse(BaseModel):
@@ -130,6 +135,11 @@ class ThreadSummaryResponse(BaseModel):
     last_message_at: datetime | None = None
     preview: str = ""
     message_count: int = 0
+
+    @field_validator("mode", mode="before")
+    @classmethod
+    def _normalize_legacy_mode(cls, v: str) -> str:
+        return "general" if v == "chat" else v
 
 
 class MessageResponse(BaseModel):
@@ -146,5 +156,10 @@ class ChatStreamRequest(BaseModel):
     thread_id: str
     query: str
     code: str | None = None
-    mode: ChatMode = "chat"
+    mode: ChatMode = "general"
+
+    @field_validator("mode", mode="before")
+    @classmethod
+    def _normalize_legacy_mode(cls, v: str) -> str:
+        return "general" if v == "chat" else v
     choice_config: ChoiceConfig | None = None

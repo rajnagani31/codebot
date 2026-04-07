@@ -295,23 +295,3 @@ class OpenAIToolGraph:
         return metadata.model_dump()
 
 
-"""
-web search bugs and errors
-
-when user ask about current and latest infomation when everything is hardecoded
--> uls featch only 3 it's good for low leavel
--> each url read whole web page and return 1600 chars
--> simple text truncation to 420 chars (NOT -AI powered)
-
-
-approch to solve this problem
-1. web search -> page reader -> is normal resgining
-2. web search -> llm -> decide to need read web page or not -> if need then call read web page tool with url -> page reader -> return data to llm 
-3. page reader service for eacha nd specific url -> it's pretiy good for current time
-
-Note : specific and via web search we use rendem fix char length but, what be apply for use all data from each urls and user can talk about this specific data, 
-so we need to read whole page and then summarize with ai and return this summary to llm and also return whole text in tool message for future use if user want to talk about this specific data.
-
-
-==> change current flow matadeta name not need to change in UI and databse beacuse is a metadata.
-"""

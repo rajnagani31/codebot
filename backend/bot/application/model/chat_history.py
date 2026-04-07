@@ -31,7 +31,7 @@ class ChatThread(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("user_details.id"), index=True, nullable=False)
     title: Mapped[str] = mapped_column(String(255), default="New chat", nullable=False)
-    mode: Mapped[str] = mapped_column(String(32), default="chat", nullable=False)
+    mode: Mapped[str] = mapped_column(String(32), default="general", nullable=False)
     client_session_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

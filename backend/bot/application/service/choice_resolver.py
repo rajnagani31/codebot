@@ -39,13 +39,16 @@ class ChoiceResolver:
             raw_choice=raw_choice,
             mode=payload.mode,
         )
-        model_name = self._resolve_model_name(
-            raw_choice=raw_choice, prompt_name=prompt_name, query=payload.query
-        )
         web_enabled, web_preferred = self._resolve_web_flags(
             raw_choice=raw_choice,
             prompt_name=prompt_name,
             current_info_requested=current_info_requested,
+        )
+        model_name = self._resolve_model_name(
+            raw_choice=raw_choice,
+            prompt_name=prompt_name,
+            query=payload.query,
+            web_preferred=web_preferred,
         )
 
         return ResolvedChoiceConfig(
@@ -86,15 +89,23 @@ class ChoiceResolver:
             return "debug"
         if mode == "review":
             return "review"
-        return "chat"
+        return "general"
 
     def _resolve_model_name(
-        self, *, raw_choice: ChoiceConfig, prompt_name: PromptName, query: str
+        self,
+        *,
+        raw_choice: ChoiceConfig,
+        prompt_name: PromptName,
+        query: str,
+        web_preferred: bool = False,
     ) -> str:
         if raw_choice.model_mode == "manual" and raw_choice.model_name:
             return raw_choice.model_name
 
         if prompt_name in {"debug", "review", "web_research"}:
+            return "gpt-4o"
+
+        if web_preferred:
             return "gpt-4o"
 
         if prompt_name == "code" and len(query) > 200:

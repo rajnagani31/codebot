@@ -13,11 +13,11 @@ class ChoiceResolverTests(unittest.TestCase):
         resolved = ChoiceResolver().resolve(
             ChoiceResolverInput(
                 query="What is the latest React version?",
-                mode="chat",
+                mode="general",
             )
         )
 
-        self.assertEqual(resolved.prompt_name, "chat")
+        self.assertEqual(resolved.prompt_name, "general")
         self.assertEqual(resolved.web_mode, "on")
         self.assertTrue(resolved.web_enabled)
         self.assertTrue(resolved.web_preferred)
@@ -27,12 +27,12 @@ class ChoiceResolverTests(unittest.TestCase):
         resolved = ChoiceResolver().resolve(
             ChoiceResolverInput(
                 query="What is the latest OpenAI API pricing?",
-                mode="chat",
+                mode="general",
                 choice_config=ChoiceConfig(mode="manual", web_mode="off"),
             )
         )
 
-        self.assertEqual(resolved.prompt_name, "chat")
+        self.assertEqual(resolved.prompt_name, "general")
         self.assertEqual(resolved.web_mode, "off")
         self.assertFalse(resolved.web_enabled)
         self.assertFalse(resolved.web_preferred)
@@ -42,7 +42,7 @@ class ChoiceResolverTests(unittest.TestCase):
         resolved = ChoiceResolver().resolve(
             ChoiceResolverInput(
                 query="Summarize PostgreSQL replication options.",
-                mode="chat",
+                mode="general",
                 choice_config=ChoiceConfig(
                     mode="manual",
                     prompt_mode="manual",
@@ -57,17 +57,42 @@ class ChoiceResolverTests(unittest.TestCase):
         self.assertTrue(resolved.web_preferred)
 
 
+    def test_web_preferred_upgrades_model_to_gpt4o(self):
+        resolved = ChoiceResolver().resolve(
+            ChoiceResolverInput(
+                query="What is the latest React version?",
+                mode="general",
+            )
+        )
+
+        self.assertTrue(resolved.web_preferred)
+        self.assertEqual(resolved.model_name, "gpt-4o")
+
+    def test_no_web_preferred_stays_on_mini(self):
+        resolved = ChoiceResolver().resolve(
+            ChoiceResolverInput(
+                query="Explain how closures work in JavaScript",
+                mode="general",
+            )
+        )
+
+        self.assertFalse(resolved.web_preferred)
+        self.assertEqual(resolved.model_name, "gpt-4o-mini")
+
+
 class SystemPromptTests(unittest.TestCase):
-    def test_prompt_warns_when_current_info_is_requested_but_web_is_off(self):
+    def test_prompt_gives_natural_fallback_when_web_off_and_current_info_requested(self):
         prompt = build_system_prompt(
-            "chat",
+            "general",
             web_enabled=False,
             web_preferred=False,
             current_info_requested=True,
         )
 
-        self.assertIn("Web search tools are disabled.", prompt)
-        self.assertIn("web search is off", prompt.lower())
+        self.assertNotIn("Web search tools are disabled", prompt)
+        self.assertNotIn("web search is off", prompt.lower())
+        self.assertIn("Handling Current Information Requests", prompt)
+        self.assertIn("best answer you can", prompt)
 
 
 if __name__ == "__main__":
