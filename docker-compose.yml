@@ -36,15 +36,15 @@ services:
 
   # ── Qdrant (vector database) ───────────────────────────────────
   vector_db:
-    image: qdrant/qdrant:v1.13.2
-    container_name: codebot-qdrant
-    # No host port — only backend needs access (via Docker network)
-    # Uncomment to debug from host: ports: ["6333:6333"]
+    image: qdrant/qdrant:v1.13.2  # This is a image with the latest stable Qdrant version as of June 2024
+    container_name: codebot-qdrant # This is a container name for the Qdrant service, used for easy reference in other services
+    ports: 
+      - "6333:6333"
     volumes:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
 
-  # ── Backend (FastAPI + uvicorn) ────────────────────────────────
+  # ── Backend (FastAPI + uvicorn) ───────────────────────────────
   backend:
     build:
       context: .
