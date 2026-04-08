@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
-type ChatMode = "chat" | "code" | "debug" | "review";
+type ChatMode = "general" | "code" | "debug" | "review";
 type ThemeName = "normal" | "black" | "white";
 type MessageStatus = "pending" | "streaming" | "completed" | "failed" | "stopped";
 type SelectorMode = "auto" | "manual";
 type WebMode = "off" | "on";
 type ModelName = "gpt-4o-mini" | "gpt-4o" | "gpt-5" | "gpt-5.4-mini";
-type PromptName = "chat" | "code" | "debug" | "review" | "web_research";
+type PromptName = "general" | "code" | "debug" | "review" | "web_research";
 type ModelSelection = "auto" | ModelName;
 type PromptSelection = "auto" | PromptName;
 
@@ -227,7 +227,7 @@ const manualModelOptions: Array<{ value: ModelSelection; label: string }> = [
 
 const manualPromptOptions: Array<{ value: PromptSelection; label: string }> = [
   { value: "auto", label: "Prompt: Auto" },
-  { value: "chat", label: "Chat" },
+  { value: "general", label: "General" },
   { value: "code", label: "Code" },
   { value: "debug", label: "Debug" },
   { value: "review", label: "Review" },
@@ -1300,7 +1300,7 @@ function App() {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [input, setInput] = useState("");
-  const [mode, setMode] = useState<ChatMode>("chat");
+  const [mode, setMode] = useState<ChatMode>("general");
   const [manualModelSelection, setManualModelSelection] = useState<ModelSelection>("auto");
   const [manualPromptSelection, setManualPromptSelection] = useState<PromptSelection>("auto");
   const [manualWebMode, setManualWebMode] = useState<WebMode>("on");
@@ -2482,7 +2482,7 @@ function App() {
                 onChange={(event) => setMode(event.target.value as ChatMode)}
                 value={mode}
               >
-                <option value="chat">Chat</option>
+                <option value="general">General</option>
                 <option value="code">Code</option>
                 <option value="debug">Debug</option>
                 <option value="review">Review</option>

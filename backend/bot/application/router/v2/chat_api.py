@@ -2,17 +2,20 @@
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-from dotenv import load_dotenv
+import os
 import redis
 import json
 import asyncio
 import time
 
-load_dotenv()
-
 router = APIRouter(prefix="/v2/chat/SSE", tags=["SSE"])
 
-rq = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
+rq = redis.Redis(
+    host=os.getenv("VALKEY_HOST", "localhost"),
+    port=int(os.getenv("VALKEY_PORT", "6379")),
+    db=0,
+    decode_responses=True,
+)
 
 
 @router.post("/trade")

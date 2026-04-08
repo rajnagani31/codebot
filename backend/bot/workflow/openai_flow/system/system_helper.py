@@ -9,7 +9,7 @@ class GetSytemInstruction:
         *,
         messages: list[BaseMessage],
         previous_context: str = "",
-        prompt_name: str = "chat",
+        prompt_name: str = "general",
         web_enabled: bool = False,
         web_preferred: bool = False,
         current_info_requested: bool = False,

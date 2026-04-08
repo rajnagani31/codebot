@@ -1,5 +1,7 @@
 from fastapi import FastAPI, Request
 
+from contextlib import asynccontextmanager
+
 from .config import AUTO_CREATE_SCHEMA, engine
 from .model.pg_vectore import Base
 
@@ -10,13 +12,20 @@ from .router.chat_history.chat_history_api import router as chat_history_router
 from .router.llm_api.chat_api import router as chat_router
 from .router.v2.chat_api import router as chat_v2_router
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(application):
+    if AUTO_CREATE_SCHEMA:
+        from sqlalchemy import text
+
+        with engine.connect() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            conn.commit()
+        Base.metadata.create_all(bind=engine)
+    yield
 
 
-# @app.on_event("startup")
-# def initialize_database():
-#     if AUTO_CREATE_SCHEMA:
-#         Base.metadata.create_all(bind=engine)
+app = FastAPI(lifespan=lifespan)
 
 
 app.include_router(auth_router, prefix="/api")

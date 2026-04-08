@@ -76,13 +76,7 @@ def build_tools(
     capabilities: ToolCapabilities,
     execution_context: ToolExecutionContext,
 ) -> list:
-    tools = [
-        two_sum,
-        apply_command,
-        list_directory,
-        create_directory,
-        read_file,
-    ]
+    tools = []
 
     if capabilities.web_search_enabled:
         if execution_context.web_search_service is None:
