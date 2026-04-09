@@ -257,6 +257,33 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+function safeUUID() {
+  if (typeof globalThis !== "undefined" && globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+
+  if (typeof globalThis !== "undefined" && globalThis.crypto?.getRandomValues) {
+    const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+    const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"));
+    return [
+      hex.slice(0, 4).join(""),
+      hex.slice(4, 6).join(""),
+      hex.slice(6, 8).join(""),
+      hex.slice(8, 10).join(""),
+      hex.slice(10, 16).join(""),
+    ].join("-");
+  }
+
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = char === "x" ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}
+
 function getClientSessionId() {
   const saved = window.localStorage.getItem(CLIENT_SESSION_STORAGE_KEY);
 
@@ -264,7 +291,7 @@ function getClientSessionId() {
     return saved;
   }
 
-  const generated = `session-${crypto.randomUUID()}`;
+  const generated = `session-${safeUUID()}`;
   window.localStorage.setItem(CLIENT_SESSION_STORAGE_KEY, generated);
   return generated;
 }
