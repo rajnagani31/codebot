@@ -1,6 +1,6 @@
 import asyncio
 import json
-
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -231,6 +231,17 @@ async def chat(
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
+
+class SQLAlchemyTestRequest(BaseModel):
+    id :int
+    user_id: str
+    title: str
+    mode: str
+    client :str
+    is_archived: bool
+    updated_at: datetime
+    created_at: datetime
+
 @router.post("/chat/stream/test")
 async def chat_test(
     user: str,
@@ -292,23 +303,23 @@ async def chat_test(
         ChatThread(id=8,user_id=138,title="Test Thread",mode="test",client_session_id="test_client",created_at=datetime.utcnow(),updated_at=datetime.utcnow()),
         ChatThread(id=9,user_id=138,title="Test Thread",mode="test",client_session_id="test_client",created_at=datetime.utcnow(),updated_at=datetime.utcnow()),
         ]
-    if new_thread:
-        return JSONResponse(
-            {
-                "message": "Thread already exists",
-            }
-        )
+    # if new_thread:
+    #     return JSONResponse(
+    #         {
+    #             "message": "Thread already exists",
+    #         }
+    #     )
 
-    session.add_all(new_thread)
-    # session.bulk_save_objects(new_thread)
-    session.commit()
+    # session.add_all(new_thread)
+    # # session.bulk_save_objects(new_thread)
+    # session.commit()
     # session.refresh(new_thread) 
 
     return JSONResponse(
         {
-            # "thead_count": user_threads,
+            "thead_count": users,
             # "user_threads": user_thread_list,
-            "message": "Test successful",
+            # "message": "Test successful",
         }
     )
 

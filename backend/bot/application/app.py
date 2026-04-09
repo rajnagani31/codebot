@@ -13,11 +13,11 @@ def run_server():
 
     try:
         importlib.import_module("bot.application.main")
-        target = "bot.application.main:app"
+        target = "backend.bot.application.main:app"
     except ModuleNotFoundError:
         target = "main:app"
 
-    uvicorn.run(target, host="localhost", port=8000, reload=True)
+    uvicorn.run(target, host="localhost", port=8001, reload=True)
 
 
 if __name__ == "__main__":

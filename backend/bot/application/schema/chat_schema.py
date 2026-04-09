@@ -54,7 +54,6 @@ class MessageProcessMetadata(BaseModel):
     model_name: str | None = None
     prompt_name: str | None = None
 
-
 class MessageMetadata(BaseModel):
     process: MessageProcessMetadata | None = None
     sources: list[SourceSummary] = Field(default_factory=list)

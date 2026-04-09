@@ -28,3 +28,4 @@ reranking (fix bad results)
 memory-aware tools
 
 reasoning chain
+uvicorn backend.bot.application.main:app --reload --port 8001
