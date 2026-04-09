@@ -258,12 +258,18 @@ function uid() {
 }
 
 function safeUUID() {
-  if (typeof globalThis !== "undefined" && globalThis.crypto?.randomUUID) {
-    return globalThis.crypto.randomUUID();
+  const cryptoApi = typeof globalThis !== "undefined" ? globalThis.crypto : undefined;
+  const randomUUID = cryptoApi && typeof cryptoApi.randomUUID === "function" ? cryptoApi.randomUUID.bind(cryptoApi) : null;
+  const getRandomValues =
+    cryptoApi && typeof cryptoApi.getRandomValues === "function" ? cryptoApi.getRandomValues.bind(cryptoApi) : null;
+
+  if (randomUUID) {
+    return randomUUID();
   }
 
-  if (typeof globalThis !== "undefined" && globalThis.crypto?.getRandomValues) {
-    const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
+  if (getRandomValues) {
+    const bytes = new Uint8Array(16);
+    getRandomValues(bytes);
     bytes[6] = (bytes[6] & 0x0f) | 0x40;
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
 
@@ -2074,7 +2080,9 @@ function App() {
   };
 
   const submitAuthForm = async () => {
-    if (!authEmail.trim() || !authPassword.trim()) {
+    const normalizedEmail = authEmail.trim();
+
+    if (!normalizedEmail || !authPassword.trim()) {
       setError("Email and password are required.");
       return;
     }
@@ -2089,9 +2097,9 @@ function App() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          email: authEmail,
+          email: normalizedEmail,
           password: authPassword,
-          display_name: authView === "signup" ? authName || null : null,
+          display_name: authView === "signup" ? authName.trim() || null : null,
           client_session_id: getClientSessionId(),
         }),
       });
