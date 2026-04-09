@@ -1,7 +1,7 @@
 services:
 
   # ── PostgreSQL (+ pgvector extension) ────────────────────────
-  db:
+  db: # namy say as service called -> db, valkey, vector_db, backend, frontend etc ..
     image: pgvector/pgvector:pg16
     container_name: codebot-db
     environment:
@@ -9,9 +9,9 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: codebot
     ports:
-      - "5433:5432"
+      - "5433:5432" # defuault ports is 5432 but machine port is 5433 to avoid conflict with any local Postgres instance and apprun on localhost:5432
     volumes:
-      - pg_data:/var/lib/postgresql/data
+      - pg_data:/var/lib/postgresql/data # store database data in a Docker volume for persistence -> Without this → data is lost when container stops
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -27,8 +27,8 @@ services:
     # Uncomment to debug from host: ports: ["6380:6379"]
     volumes:
       - valkey_data:/data
-    healthcheck:
-      test: ["CMD", "valkey-cli", "ping"]
+    healthcheck: # Docker check Db is ready or not, tries every 5 secounds, if not ready after 5 retries → mark as unhealthy
+      test: ["CMD", "valkey-cli", "ping"] 
       interval: 5s
       timeout: 3s
       retries: 5
