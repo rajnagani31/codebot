@@ -345,3 +345,6 @@ async def sqlalchemy_lookups():
             }
         )
     return JSONResponse({"threads": thread_data})
+
+def test_nero_16():
+    pass
