@@ -1,4 +1,4 @@
-import uuid
+import secrets
 from datetime import datetime
 
 from sqlalchemy import func, select
@@ -13,7 +13,7 @@ class ChatRepository:
     def create_user(self) -> ChatUser:
         session = self.session_factory()
         try:
-            user = ChatUser(session_label=uuid.uuid4().hex[:12])
+            user = ChatUser(session_label=secrets.token_hex(6))
             session.add(user)
             session.commit()
             session.refresh(user)
@@ -53,7 +53,6 @@ class ChatRepository:
         now = datetime.utcnow()
         try:
             thread = ChatThread(
-                id=uuid.uuid4().hex,
                 user_id=user_id,
                 title=title.strip() or "New chat",
                 mode=mode,
@@ -68,7 +67,7 @@ class ChatRepository:
         finally:
             session.close()
 
-    def get_thread(self, *, user_id: int, thread_id: str) -> ChatThread | None:
+    def get_thread(self, *, user_id: int, thread_id: int) -> ChatThread | None:
         session = self.session_factory()
         try:
             stmt = select(ChatThread).where(
@@ -118,7 +117,7 @@ class ChatRepository:
         finally:
             session.close()
 
-    def list_messages(self, *, user_id: int, thread_id: str) -> list[ChatMessage]:
+    def list_messages(self, *, user_id: int, thread_id: int) -> list[ChatMessage]:
         session = self.session_factory()
         try:
             stmt = (
@@ -130,7 +129,7 @@ class ChatRepository:
         finally:
             session.close()
 
-    def recent_messages(self, *, user_id: int, thread_id: str, limit: int = 2) -> list[ChatMessage]:
+    def recent_messages(self, *, user_id: int, thread_id: int, limit: int = 2) -> list[ChatMessage]:
         session = self.session_factory()
         try:
             stmt = (
@@ -153,7 +152,7 @@ class ChatRepository:
     def create_message(
         self,
         *,
-        thread_id: str,
+        thread_id: int,
         user_id: int,
         role: str,
         content: str,
@@ -169,7 +168,6 @@ class ChatRepository:
         try:
             sequence_no = self._next_sequence_no(session, thread_id)
             message = ChatMessage(
-                id=uuid.uuid4().hex,
                 thread_id=thread_id,
                 user_id=user_id,
                 role=role,
@@ -199,7 +197,7 @@ class ChatRepository:
     def finalize_message(
         self,
         *,
-        message_id: str,
+        message_id: int,
         content: str,
         status: str,
         error_text: str | None = None,
@@ -232,7 +230,7 @@ class ChatRepository:
         finally:
             session.close()
 
-    def _next_sequence_no(self, session, thread_id: str) -> int:
+    def _next_sequence_no(self, session, thread_id: int) -> int:
         current_max = session.scalar(
             select(func.max(ChatMessage.sequence_no)).where(ChatMessage.thread_id == thread_id)
         )

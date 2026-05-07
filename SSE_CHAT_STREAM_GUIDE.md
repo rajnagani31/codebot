@@ -955,7 +955,7 @@ def store(
                 extra_metadata.update(metadata)
 
             row = VectorData(
-                id=str(uuid.uuid4()),
+                id=str(id.id4()),
                 user_session_id=user_session_id,
                 user_id=user_id,
                 content=chunk,

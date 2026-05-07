@@ -18,10 +18,10 @@ depends_on = None
 def upgrade() -> None:
     op.create_table(
         "web_search_runs",
-        sa.Column("id", sa.String(length=64), nullable=False),
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=False),
-        sa.Column("thread_id", sa.String(length=64), nullable=False),
-        sa.Column("message_id", sa.String(length=64), nullable=False),
+        sa.Column("thread_id", sa.Integer(), nullable=False),
+        sa.Column("message_id", sa.Integer(), nullable=False),
         sa.Column("query", sa.String(length=512), nullable=False),
         sa.Column("provider", sa.String(length=64), nullable=False),
         sa.Column("status", sa.String(length=32), nullable=False),
@@ -42,11 +42,11 @@ def upgrade() -> None:
 
     op.create_table(
         "web_sources",
-        sa.Column("id", sa.String(length=64), nullable=False),
-        sa.Column("run_id", sa.String(length=64), nullable=False),
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("run_id", sa.Integer(), nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=False),
-        sa.Column("thread_id", sa.String(length=64), nullable=False),
-        sa.Column("message_id", sa.String(length=64), nullable=False),
+        sa.Column("thread_id", sa.Integer(), nullable=False),
+        sa.Column("message_id", sa.Integer(), nullable=False),
         sa.Column("rank", sa.Integer(), nullable=False),
         sa.Column("title", sa.String(length=512), nullable=False),
         sa.Column("url", sa.Text(), nullable=False),

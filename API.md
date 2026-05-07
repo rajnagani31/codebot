@@ -165,7 +165,7 @@ Content-Type: application/json
 
 ```json
 {
-  "id": "thread_uuid",
+  "id": "thread_id",
   "title": "Debug API issue",
   "mode": "chat",
   "updated_at": "2026-03-26T10:00:00.000000",
@@ -327,7 +327,7 @@ Content-Type: application/json
 
 ```json
 {
-  "thread_id": "thread_uuid",
+  "thread_id": "thread_id",
   "query": "why is my api failing",
   "code": "optional code here",
   "mode": "debug"

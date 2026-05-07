@@ -1,4 +1,4 @@
-import uuid
+import secrets
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
@@ -10,8 +10,8 @@ from .pg_vectore import Base
 class ChatUser(Base):
     __tablename__ = "user_details"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True) # mapped is type hint, mapped_column defines the column in the database
-    public_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True, index=True, default=lambda: str(uuid.uuid4()))
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    public_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True, index=True, default=lambda: f"usr_{secrets.token_hex(16)}")
     session_label: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True, index=True)
     display_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -28,7 +28,7 @@ class ChatUser(Base):
 class ChatThread(Base):
     __tablename__ = "chat_threads"
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("user_details.id"), index=True, nullable=False)
     title: Mapped[str] = mapped_column(String(255), default="New chat", nullable=False)
     mode: Mapped[str] = mapped_column(String(32), default="general", nullable=False)
@@ -42,8 +42,8 @@ class ChatThread(Base):
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    thread_id: Mapped[str] = mapped_column(ForeignKey("chat_threads.id"), index=True, nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    thread_id: Mapped[int] = mapped_column(ForeignKey("chat_threads.id"), index=True, nullable=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("user_details.id"), index=True, nullable=False)
     role: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
     content: Mapped[str] = mapped_column(Text, default="", nullable=False)
@@ -76,7 +76,7 @@ class AuthIdentity(Base):
 class UserSession(Base):
     __tablename__ = "user_sessions"
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("user_details.id"), index=True, nullable=False)
     auth_method: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     session_token_hash: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
