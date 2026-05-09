@@ -9,7 +9,7 @@ from ...workflow.qudrant.vector_service import QdrantVectorService
 
 @dataclass
 class ChatStreamContext:
-    thread_id: str
+    thread_id: int
     user_message: object
     assistant_message: object
     llm_messages: list
@@ -38,14 +38,14 @@ class ChatService:
     def list_threads(self, *, user_id: int) -> list[dict]:
         return self.repository.list_threads(user_id=user_id)
 
-    def list_messages(self, *, user_id: int, thread_id: str):
+    def list_messages(self, *, user_id: int, thread_id: int):
         return self.repository.list_messages(user_id=user_id, thread_id=thread_id)
 
     def prepare_stream(
         self,
         *,
         user_id: int,
-        thread_id: str,
+        thread_id: int,
         query: str,
         mode: str,
         code: str | None = None,
@@ -105,9 +105,9 @@ class ChatService:
         self,
         *,
         user_id: int,
-        thread_id: str,
-        user_message_id: str,
-        assistant_message_id: str,
+        thread_id: int,
+        user_message_id: int,
+        assistant_message_id: int,
         user_query: str,
         assistant_content: str,
         status: str,

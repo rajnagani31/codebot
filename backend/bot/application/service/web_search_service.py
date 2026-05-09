@@ -26,8 +26,8 @@ class WebSearchService:
         *,
         query: str,
         user_id: int,
-        thread_id: str,
-        message_id: str,
+        thread_id: int,
+        message_id: int,
         max_results: int = 3,
     ) -> dict:
         search_payload = await self.provider.search(query, max_results=max_results)
@@ -97,7 +97,7 @@ class WebSearchService:
         }
 
     def build_context_pack(
-        self, *, query: str, run_id: str, sources: list[dict]
+        self, *, query: str, run_id: int, sources: list[dict]
     ) -> dict:
         source_summaries = [
             {
@@ -132,11 +132,11 @@ class WebSearchService:
         *,
         query: str,
         user_id: int,
-        thread_id: str,
-        message_id: str,
+        thread_id: int,
+        message_id: int,
         sources: list[dict],
         provider_name: str,
-    ) -> str:
+    ) -> int:
         session = SessionLocal()
         now = datetime.utcnow()
         run = WebSearchRun(

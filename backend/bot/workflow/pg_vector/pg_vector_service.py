@@ -1,6 +1,5 @@
 import os
 import sys
-import uuid
 from datetime import datetime
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -61,7 +60,7 @@ class PGVectorService:
         type_: str,
         *,
         metadata: dict | None = None,
-        user_session_id: str | None = None,
+        user_session_id: int | None = None,
     ):
         session = self.Session()
 
@@ -78,7 +77,6 @@ class PGVectorService:
                     extra_metadata.update(metadata)
 
                 row = VectorData(
-                    id=str(uuid.uuid4()),
                     user_session_id=user_session_id,
                     user_id=user_id,
                     content=chunk,

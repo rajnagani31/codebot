@@ -257,14 +257,14 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-function safeUUID() {
+function safeid() {
   const cryptoApi = typeof globalThis !== "undefined" ? globalThis.crypto : undefined;
-  const randomUUID = cryptoApi && typeof cryptoApi.randomUUID === "function" ? cryptoApi.randomUUID.bind(cryptoApi) : null;
+  const randomid = cryptoApi && typeof cryptoApi.randomid === "function" ? cryptoApi.randomid.bind(cryptoApi) : null;
   const getRandomValues =
     cryptoApi && typeof cryptoApi.getRandomValues === "function" ? cryptoApi.getRandomValues.bind(cryptoApi) : null;
 
-  if (randomUUID) {
-    return randomUUID();
+  if (randomid) {
+    return randomid();
   }
 
   if (getRandomValues) {
@@ -297,7 +297,7 @@ function getClientSessionId() {
     return saved;
   }
 
-  const generated = `session-${safeUUID()}`;
+  const generated = `session-${safeid()}`;
   window.localStorage.setItem(CLIENT_SESSION_STORAGE_KEY, generated);
   return generated;
 }

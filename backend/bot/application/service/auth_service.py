@@ -4,8 +4,8 @@ import hashlib
 import hmac
 import json
 import os
+import secrets
 import time
-import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from urllib.parse import quote, urlencode
@@ -52,7 +52,7 @@ class AuthenticatedPrincipal:
     user_type: str
     auth_provider: str
     email_verified: bool
-    session_id: str
+    session_id: int
     session_expires_at: datetime
     guest_message_limit: int | None
     guest_messages_used: int
@@ -68,7 +68,7 @@ class SessionTokens:
     refresh_expires_at: int
     user_id: int
     session_label: str
-    session_id: str
+    session_id: int
     user: AuthenticatedPrincipal
 
 
@@ -184,8 +184,8 @@ class AuthService:
             raise AuthError("Refresh token missing")
 
         payload = self._decode_token(refresh_token, expected_type="refresh")
-        session_id = str(payload.get("sid") or "")
-        if not session_id:
+        session_id = self._parse_session_id(payload.get("sid"))
+        if session_id is None:
             raise AuthError("Refresh token session missing")
 
         record = self.repository.get_session_user(session_id)
@@ -220,8 +220,8 @@ class AuthService:
             raise AuthError("Authorization required")
 
         payload = self._decode_token(access_token, expected_type="access")
-        session_id = str(payload.get("sid") or "")
-        if not session_id:
+        session_id = self._parse_session_id(payload.get("sid"))
+        if session_id is None:
             raise AuthError("Token session missing")
 
         record = self.repository.get_session_user(session_id)
@@ -271,7 +271,7 @@ class AuthService:
         state = self._encode_token(
             {
                 "typ": "google_state",
-                "nonce": uuid.uuid4().hex,
+                "nonce": secrets.token_hex(16),
                 "iat": int(time.time()),
                 "exp": int(time.time()) + GOOGLE_STATE_TTL_SECONDS,
             }
@@ -415,9 +415,21 @@ class AuthService:
         access_expires_at_dt, refresh_expires_at_dt = self._build_expiry_window(
             is_guest=is_guest
         )
-        session_id = (
-            existing_session.id if existing_session is not None else uuid.uuid4().hex
-        )
+        session_id = existing_session.id if existing_session is not None else None
+        if session_id is None:
+            provisional_session = self.repository.create_session(
+                user_id=user.id,
+                auth_method=auth_method,
+                session_token_hash=secrets.token_hex(64),
+                refresh_token_hash=secrets.token_hex(64),
+                expires_at=access_expires_at_dt,
+                refresh_expires_at=refresh_expires_at_dt,
+                client_session_id=client_session_id,
+                user_agent=request.headers.get("User-Agent"),
+                ip_address=request.client.host if request.client else None,
+                message_limit=GUEST_MESSAGE_LIMIT if is_guest else None,
+            )
+            session_id = provisional_session.id
         access_token = self._encode_token(
             {
                 "typ": "access",
@@ -442,30 +454,15 @@ class AuthService:
         access_token_hash = self._hash_token(access_token)
         refresh_token_hash = self._hash_token(refresh_token)
 
-        if existing_session is None:
-            user_session = self.repository.create_session(
-                session_id=session_id,
-                user_id=user.id,
-                auth_method=auth_method,
-                session_token_hash=access_token_hash,
-                refresh_token_hash=refresh_token_hash,
-                expires_at=access_expires_at_dt,
-                refresh_expires_at=refresh_expires_at_dt,
-                client_session_id=client_session_id,
-                user_agent=request.headers.get("User-Agent"),
-                ip_address=request.client.host if request.client else None,
-                message_limit=GUEST_MESSAGE_LIMIT if is_guest else None,
-            )
-        else:
-            user_session = self.repository.rotate_session_tokens(
-                session_id=existing_session.id,
-                session_token_hash=access_token_hash,
-                refresh_token_hash=refresh_token_hash,
-                expires_at=access_expires_at_dt,
-                refresh_expires_at=refresh_expires_at_dt,
-            )
-            if user_session is None:
-                raise AuthError("Session not found")
+        user_session = self.repository.rotate_session_tokens(
+            session_id=session_id,
+            session_token_hash=access_token_hash,
+            refresh_token_hash=refresh_token_hash,
+            expires_at=access_expires_at_dt,
+            refresh_expires_at=refresh_expires_at_dt,
+        )
+        if user_session is None:
+            raise AuthError("Session not found")
 
         principal = self._build_principal(user, user_session)
         expires_at = calendar.timegm(access_expires_at_dt.timetuple())
@@ -527,7 +524,7 @@ class AuthService:
             return auth_header[7:].strip()
         return None
 
-    def _extract_session_id_from_request(self, request: Request) -> str | None:
+    def _extract_session_id_from_request(self, request: Request) -> int | None:
         for token in (
             self._extract_access_token(request),
             request.cookies.get(REFRESH_COOKIE_NAME),
@@ -538,10 +535,19 @@ class AuthService:
                 payload = self._decode_token(token)
             except AuthError:
                 continue
-            session_id = payload.get("sid")
-            if session_id:
-                return str(session_id)
+            session_id = self._parse_session_id(payload.get("sid"))
+            if session_id is not None:
+                return session_id
         return None
+
+    def _parse_session_id(self, value: object) -> int | None:
+        if value is None:
+            return None
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return None
+        return parsed if parsed > 0 else None
 
     def _validate_session(
         self, session: UserSession, *, expected_token: str, token_kind: str
