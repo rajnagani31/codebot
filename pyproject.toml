@@ -27,3 +27,8 @@ dependencies = [
     "textual>=8.1.1",
     "uvicorn>=0.42.0",
 ]
+
+[dependency-groups]
+dev = [
+    "langsmith>=0.8.0",
+]

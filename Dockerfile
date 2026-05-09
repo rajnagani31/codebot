@@ -40,7 +40,7 @@ RUN pip install --no-cache-dir uv
 COPY pyproject.toml uv.lock ./
 
 # Install Python dependencies using UV.
-RUN uv sync --frozen --no-dev
+RUN uv sync --no-dev
 
 
 # Copy source code

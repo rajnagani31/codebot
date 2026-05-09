@@ -6,7 +6,6 @@
 🔥 NEXT LEVEL (Phase 4 — REAL MAGIC)
 
 Now we can upgrade to:
-
 🚀 Smart Memory System
 
 memory importance scoring

@@ -2,9 +2,10 @@ from datetime import datetime
 from enum import Enum
 
 from sqlalchemy import BigInteger, DateTime, Enum as SQLEnum, ForeignKey, Index, Integer, MetaData, String, Text
-from sqlalchemy.orm import Mapped, declarative_base, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 
-Base = declarative_base()
+# Import Base from the centralized database module
+from backend.bot.application.core.database import Base
 
 
 class FindingSeverityEnum(str, Enum):

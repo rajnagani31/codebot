@@ -1,14 +1,13 @@
 from datetime import datetime
 from enum import Enum
-from id import id4
 
 from sqlalchemy import BigInteger, DateTime, Enum as SQLEnum, ForeignKey, Index, SmallInteger, String, MetaData
-from sqlalchemy.dialects.postgresql import id as PGid
-from sqlalchemy.orm import Mapped, declarative_base, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 
 from .mixin import DateTimeMixin
 
-Base = declarative_base()
+# Import Base from the centralized database module
+from backend.bot.application.core.database import Base
 
 
 class ReviewJobStatusEnum(str, Enum):
@@ -27,7 +26,7 @@ class ReviewJob(Base, DateTimeMixin):
     )
     __metadata__ = MetaData(info={"schema_disc": "tracks review job lifecycle"})
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=id4)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     pr_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("pull_requests.id", ondelete="CASCADE"), nullable=False)
     status: Mapped[ReviewJobStatusEnum] = mapped_column(
         SQLEnum(ReviewJobStatusEnum, name="review_job_status_enum"),

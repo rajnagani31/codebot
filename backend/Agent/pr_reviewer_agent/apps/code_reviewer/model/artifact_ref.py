@@ -1,11 +1,10 @@
 from datetime import datetime
 from enum import Enum
-from id import id
-from sqlalchemy import BigInteger, DateTime, Enum as SQLEnum, ForeignKey, Index, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import id as PGid
-from sqlalchemy.orm import Mapped, declarative_base, mapped_column
-
-Base = declarative_base()
+from sqlalchemy import BigInteger, DateTime, Enum as SQLEnum, ForeignKey, Index, MetaData, String, Text, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column
+from .mixin import DateTimeMixin
+# Import Base from the centralized database module
+from backend.bot.application.core.database import Base
 
 
 class ArtifactTypeEnum(str, Enum):
@@ -17,7 +16,7 @@ class ArtifactTypeEnum(str, Enum):
     OTHER = "other"
 
 
-class ArtifactRef(Base):
+class ArtifactRef(Base, DateTimeMixin):
     __tablename__ = "artifact_refs"
     __table_args__ = (
         Index("ix_artifact_refs_job_id_type", "job_id", "artifact_type"),

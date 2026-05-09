@@ -2,12 +2,12 @@ from decimal import Decimal
 
 from sqlalchemy import BigInteger, ForeignKey, Numeric, MetaData
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, declarative_base, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 
 from .mixin import DateTimeMixin
 
-
-Base = declarative_base()
+# Import Base from the centralized database module
+from backend.bot.application.core.database import Base
 
 
 class ReviewReport(Base, DateTimeMixin):

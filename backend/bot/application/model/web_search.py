@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from .pg_vectore import Base
+from ..core.database import Base
 
 
 class WebSearchRun(Base):

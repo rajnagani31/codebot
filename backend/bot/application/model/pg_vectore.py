@@ -1,11 +1,9 @@
 from sqlalchemy import JSON, Column, Integer, Text, String, DateTime
 from pgvector.sqlalchemy import Vector
-from sqlalchemy.orm import declarative_base
 from sqlalchemy.dialects.postgresql import JSONB
 from datetime import datetime
+from ..core.database import Base
 # from sqlalchemy.ext.mutable import JSONB
-
-Base = declarative_base()
 
 
 class DocumentData(Base):

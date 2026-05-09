@@ -1,12 +1,11 @@
 from datetime import datetime
 from enum import Enum
-from id import id
-from mixin import DateTimeMixin
 from sqlalchemy import BigInteger, DateTime, Enum as SQLEnum, Index, Integer, String, UniqueConstraint, MetaData
-from sqlalchemy.dialects.postgresql import id as PGid
-from sqlalchemy.orm import Mapped, declarative_base, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 
-Base = declarative_base()
+# Import Base from the centralized database module
+from backend.bot.application.core.database import Base
+from .mixin import DateTimeMixin
 
 
 class PRStateEnum(str, Enum):
@@ -35,4 +34,9 @@ class PullRequest(Base, DateTimeMixin):
         nullable=True,
         default=PRStateEnum.OPEN,
     )
-    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(String, nullable=True)
+    source_branch: Mapped[str] = mapped_column(String(255), nullable=False)
+    target_branch: Mapped[str] = mapped_column(String(255), nullable=False)
+    url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    

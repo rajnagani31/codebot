@@ -3,7 +3,6 @@ from qdrant_client.http import models
 from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import os
-import id
 from datetime import datetime
 from dotenv import load_dotenv
 
