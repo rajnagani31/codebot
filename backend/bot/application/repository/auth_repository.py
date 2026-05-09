@@ -1,4 +1,4 @@
-import uuid
+import secrets
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -22,8 +22,8 @@ class AuthRepository:
         now = datetime.utcnow()
         try:
             user = ChatUser(
-                public_id=str(uuid.uuid4()),
-                session_label=uuid.uuid4().hex[:12],
+                public_id=f"usr_{secrets.token_hex(16)}",
+                session_label=secrets.token_hex(6),
                 user_type="guest",
                 primary_auth_provider="guest",
                 email_verified=False,
@@ -61,8 +61,8 @@ class AuthRepository:
         normalized_email = email.lower()
         try:
             user = ChatUser(
-                public_id=str(uuid.uuid4()),
-                session_label=uuid.uuid4().hex[:12],
+                public_id=f"usr_{secrets.token_hex(16)}",
+                session_label=secrets.token_hex(6),
                 email=normalized_email,
                 display_name=display_name,
                 user_type="registered",
@@ -193,8 +193,8 @@ class AuthRepository:
 
             if user is None:
                 user = ChatUser(
-                    public_id=str(uuid.uuid4()),
-                    session_label=uuid.uuid4().hex[:12],
+                    public_id=f"usr_{secrets.token_hex(16)}",
+                    session_label=secrets.token_hex(6),
                     email=normalized_email,
                     display_name=display_name,
                     user_type="registered",
@@ -271,7 +271,6 @@ class AuthRepository:
     def create_session(
         self,
         *,
-        session_id: str,
         user_id: int,
         auth_method: str,
         session_token_hash: str,
@@ -287,7 +286,6 @@ class AuthRepository:
         now = datetime.utcnow()
         try:
             user_session = UserSession(
-                id=session_id,
                 user_id=user_id,
                 auth_method=auth_method,
                 session_token_hash=session_token_hash,
@@ -311,14 +309,14 @@ class AuthRepository:
         finally:
             session.close()
 
-    def get_session(self, session_id: str) -> UserSession | None:
+    def get_session(self, session_id: int) -> UserSession | None:
         session = self.session_factory()
         try:
             return session.get(UserSession, session_id)
         finally:
             session.close()
 
-    def get_session_user(self, session_id: str) -> SessionUserRecord | None:
+    def get_session_user(self, session_id: int) -> SessionUserRecord | None:
         session = self.session_factory()
         try:
             user_session = session.get(UserSession, session_id)
@@ -333,7 +331,7 @@ class AuthRepository:
         finally:
             session.close()
 
-    def touch_session(self, session_id: str) -> UserSession | None:
+    def touch_session(self, session_id: int) -> UserSession | None:
         session = self.session_factory()
         now = datetime.utcnow()
         try:
@@ -365,7 +363,7 @@ class AuthRepository:
     def rotate_session_tokens(
         self,
         *,
-        session_id: str,
+        session_id: int,
         session_token_hash: str,
         refresh_token_hash: str,
         expires_at: datetime,
@@ -388,7 +386,7 @@ class AuthRepository:
         finally:
             session.close()
 
-    def revoke_session(self, session_id: str) -> UserSession | None:
+    def revoke_session(self, session_id: int) -> UserSession | None:
         session = self.session_factory()
         now = datetime.utcnow()
         try:
@@ -404,7 +402,7 @@ class AuthRepository:
         finally:
             session.close()
 
-    def consume_message_credit(self, session_id: str) -> UserSession | None:
+    def consume_message_credit(self, session_id: int) -> UserSession | None:
         session = self.session_factory()
         now = datetime.utcnow()
         try:

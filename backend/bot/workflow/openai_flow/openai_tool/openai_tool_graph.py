@@ -22,8 +22,8 @@ from bot.workflow.openai_flow.system.system_helper import GetSytemInstruction
 @dataclass(slots=True)
 class GraphRunContext:
     user_id: int
-    thread_id: str
-    assistant_message_id: str
+    thread_id: int
+    assistant_message_id: int
 
 
 class OpenAIToolGraph:
@@ -61,7 +61,7 @@ class OpenAIToolGraph:
         tools_used: list[str] = []
         sources: list[dict[str, Any]] = []
         citations: list[dict[str, Any]] = []
-        web_search_run_id: str | None = None
+        web_search_run_id: int | None = None
 
         print("Exiting tool graph run loop")
         print("conversation",conversation)
@@ -262,7 +262,7 @@ class OpenAIToolGraph:
         tools_used: list[str],
         sources: list[dict[str, Any]],
         citations: list[dict[str, Any]],
-        web_search_run_id: str | None,
+        web_search_run_id: int | None,
     ) -> dict[str, Any]:
         web_tools = {"web_search", "read_web_page"}
         non_web_tools_used = [name for name in tools_used if name not in web_tools]

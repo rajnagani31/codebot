@@ -52,7 +52,7 @@ def list_threads(
 
 @router.get("/threads/{thread_id}/messages", response_model=list[MessageResponse])
 def list_messages(
-    thread_id: str,
+    thread_id: int,
     current_user=Depends(require_current_user),
     chat_service: ChatService = Depends(get_chat_service),
 ):

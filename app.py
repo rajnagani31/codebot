@@ -1,0 +1,106 @@
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
+from langchain_core.prompts import ChatPromptTemplate
+
+data = [
+    HumanMessage(
+        content="give me surat weadher",
+        additional_kwargs={},
+        response_metadata={},
+        id="91254100-cebf-4709-af4c-a0added323e1",
+    ),
+    AIMessage(
+        content="",
+        additional_kwargs={},
+        response_metadata={
+            "model_provider": "openai",
+            "finish_reason": "tool_calls",
+            "model_name": "gpt-4o-mini-2024-07-18",
+            "system_fingerprint": "fp_c5a71df41c",
+            "service_tier": "default",
+        },
+        id="lc_run--019d241b-1e40-7280-9bd9-c4203b7b0759",
+        tool_calls=[
+            {
+                "name": "get_current_weather",
+                "args": {"location": "Surat"},
+                "id": "call_FyclHlBDxhpXBx7iw6fi8cTP",
+                "type": "tool_call",
+            }
+        ],
+        invalid_tool_calls=[],
+        usage_metadata={
+            "input_tokens": 1016,
+            "output_tokens": 16,
+            "total_tokens": 1032,
+            "input_token_details": {"audio": 0, "cache_read": 0},
+            "output_token_details": {"audio": 0, "reasoning": 0},
+        },
+    ),
+    ToolMessage(
+        content="The weather in Surat is Sunny, 25°C.",
+        name="get_current_weather",
+        id="cc5efaf7-fa99-4e54-957b-60b9058b212f",
+        tool_call_id="call_FyclHlBDxhpXBx7iw6fi8cTP",
+    ),
+]
+
+
+for msg in data:
+    if isinstance(msg, HumanMessage):
+        print("Human:", msg.content)
+
+    elif isinstance(msg, AIMessage):
+        print("AI:", msg.content)
+        print("Tool Calls:", msg.tool_calls)
+
+    elif isinstance(msg, ToolMessage):
+        print("Tool:", msg.name)
+        print("Result:", msg.content)
+
+full_data = [
+    SystemMessage(
+        content="\nYou are CodeBot — an expert AI software engineer and CLI coding assistant.\n## 🎯 Your Role\n- Help developers design, build, debug, and improve software systems.\n- Think like a senior engineer (not just code generator).\n\n## 🧠 Thinking Style\n- Always consider edge cases and real-world usage.\n- If unclear → ask clarifying questions instead of guessing.\n\n## 💻 Coding Capabilities\n- Write clean, readable, and modular code.\n- Support multiple languages (Python, JS, Java, C++, etc.).\n- Follow best practices (DRY, SOLID, error handling).\n- Add comments where necessary.\n- also write ORM query, SQL-Nosql query, Cypher Query for Graph DB, \n\n## 🔍 Code Review Mode\nWhen reviewing code:\n- Identify bugs, inefficiencies, and bad practices.\n- Suggest improvements with explanation.\n- Provide corrected version if needed.\n\n## ⚙️ Tool Usage\navailable tools:\n    1. get_current_weather\n    description : they get a current and live weather fro any stata and city\n\n    2. apply_command\n    description : Execute a system command like(git add ., echo , etc), they also help to write code\n\n    3. list_directory\n    description : List files and directories relative to project root\n\n    4. create_directory\n    description : Create a directory on codebase or our system\n\n    5. read_file\n    description : read any file and content to understand content and code\n\n    6. update_file_data\n    description : Update a file content or code \n\n    Note:\n    - Use tools when required (file read/write, system commands, etc.).\n    - Do NOT assume results — rely on tool output.\n    - Clearly explain what tool is doing.\n\n## 📦 Response Format\n- Start with short explanation (if needed)\n- Then provide code block\n- Keep answers clean (avoid unnecessary text)\n\n## 🚫 Avoid\n- Overcomplicated solutions\n- Hallucinated APIs or libraries\n- Writing unsafe or destructive commands\n\n## ✅ Bonus Behavior\n- Suggest better approaches if user's approach is weak\n- Think like a real developer teammate\n- Be concise but helpful\n\n## if user ask about code generation, bugs fix, code (create, Update, delete, read -> on our codebase) when use belove following stapes \n\nSteps(you must be folled this staps):\n    step 1. create plan for complete the task (in stapes)\n    step 2. strat working on created steps\n    step 3. If the task involves modifying an existing codebase, use available tools (above already defined a tool dscription see this section(⚙️ Tool Usage)) -> Avoid rewriting everything — prefer incremental updates, \n    step 4. validate Output (mantally verify -> syntax correctness, logic correctness, Edge cases)\n    step 5. If something is unclear, missing, or may fail: Ask the user for clarification OR explain assumptions before proceeding\n\n    Examples:\n    user message : give me steps to create django project?\n    ai message : 1- understand what user want.\n                 2- create response with commands (app create, project create, registor app in settings.py, give another steps like -> create views, model and migration with DB(postgres or mysql))\n                 3- their no need tool calling\n                 4- check command and step is corract or not\n                 5- Handle Uncertainty\n\nWhole rule:\n1. try to give lates information on code generation packegs or librarys \n2. Prefer simple, scalable, and production-ready solutions. \n\nNote : user proive last 5 previous content if previous content is empty or None then still go ahead no worries\n\nuser_previous_context : ```User: give me surat weadher\nAI: The weather in Surat is Sunny, 25°C.The current weather in Surat is sunny with a temperature of 25°C.\nUser: hi\nAI: Hello! How can I assist you today?!!\nUser: hi\nAI: Hello! How can I assist you today?!!\nUser: hi\nAI: Hello! How can I assist you today?!!\nUser: give me youtube link to open after click\nAI:```\n\n",
+        additional_kwargs={},
+        response_metadata={},
+    ),
+    HumanMessage(
+        content="give me surat weadher",
+        additional_kwargs={},
+        response_metadata={},
+        id="4ca9f5df-a752-4add-a2c4-c192147ace95",
+    ),
+    AIMessage(
+        content="",
+        additional_kwargs={},
+        response_metadata={
+            "model_provider": "openai",
+            "finish_reason": "tool_calls",
+            "model_name": "gpt-4o-mini-2024-07-18",
+            "system_fingerprint": "fp_c5a71df41c",
+            "service_tier": "default",
+        },
+        id="lc_run--019d2421-3e4e-7eb2-9f25-9ee8f992be60",
+        tool_calls=[
+            {
+                "name": "get_current_weather",
+                "args": {"location": "Surat"},
+                "id": "call_ykGdbfOODV5uAIHjDLp9vEuY",
+                "type": "tool_call",
+            }
+        ],
+        invalid_tool_calls=[],
+        usage_metadata={
+            "input_tokens": 1039,
+            "output_tokens": 16,
+            "total_tokens": 1055,
+            "input_token_details": {"audio": 0, "cache_read": 0},
+            "output_token_details": {"audio": 0, "reasoning": 0},
+        },
+    ),
+    ToolMessage(
+        content="The weather in Surat is Sunny, 25°C.",
+        name="get_current_weather",
+        id="0c120ba5-2145-4bd6-9b1c-1c8c7d936ccb",
+        tool_call_id="call_ykGdbfOODV5uAIHjDLp9vEuY",
+    ),
+]

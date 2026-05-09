@@ -58,7 +58,7 @@ class MessageMetadata(BaseModel):
     process: MessageProcessMetadata | None = None
     sources: list[SourceSummary] = Field(default_factory=list)
     citations: list[dict[str, Any]] = Field(default_factory=list)
-    web_search_run_id: str | None = None
+    web_search_run_id: int | None = None
 
 
 class AuthenticatedUserResponse(BaseModel):
@@ -70,7 +70,7 @@ class AuthenticatedUserResponse(BaseModel):
     user_type: UserType
     auth_provider: str
     email_verified: bool
-    session_id: str
+    session_id: int
     session_expires_at: datetime
     guest_message_limit: int | None = None
     guest_messages_used: int = 0
@@ -82,7 +82,7 @@ class UserSessionResponse(BaseModel):
     access_token: str
     session_label: str
     user_id: int
-    session_id: str
+    session_id: int
     expires_at: int
     refresh_expires_at: int
     user: AuthenticatedUserResponse
@@ -127,7 +127,7 @@ class CreateThreadRequest(BaseModel):
 
 
 class ThreadSummaryResponse(BaseModel):
-    id: str
+    id: int
     title: str
     mode: ChatMode
     updated_at: datetime
@@ -142,7 +142,7 @@ class ThreadSummaryResponse(BaseModel):
 
 
 class MessageResponse(BaseModel):
-    id: str
+    id: int
     role: str
     content: str
     status: str
@@ -152,7 +152,7 @@ class MessageResponse(BaseModel):
 
 
 class ChatStreamRequest(BaseModel):
-    thread_id: str
+    thread_id: int
     query: str
     code: str | None = None
     mode: ChatMode = "general"

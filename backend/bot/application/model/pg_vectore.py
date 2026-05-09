@@ -1,11 +1,9 @@
 from sqlalchemy import JSON, Column, Integer, Text, String, DateTime
 from pgvector.sqlalchemy import Vector
-from sqlalchemy.orm import declarative_base
 from sqlalchemy.dialects.postgresql import JSONB
 from datetime import datetime
+from ..core.database import Base
 # from sqlalchemy.ext.mutable import JSONB
-
-Base = declarative_base()
 
 
 class DocumentData(Base):
@@ -19,8 +17,8 @@ class DocumentData(Base):
 class VectorData(Base):
     __tablename__ = "vector_data"
 
-    id = Column(String, primary_key=True)
-    user_session_id = Column(String, nullable=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_session_id = Column(Integer, nullable=True)
     user_id = Column(Integer, index=True)
     content = Column(Text)
     embedding = Column(Vector(1536))  # 👈 important

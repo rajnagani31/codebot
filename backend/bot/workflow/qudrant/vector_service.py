@@ -3,7 +3,6 @@ from qdrant_client.http import models
 from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import os
-import uuid
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -52,7 +51,7 @@ class QdrantVectorService:
 
             points.append(
                 models.PointStruct(
-                    id=str(uuid.uuid4()),
+                    id=str(id.id4()),
                     vector=embedding,
                     payload={
                         "user_id": user_id,
