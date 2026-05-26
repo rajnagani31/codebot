@@ -3,8 +3,6 @@ services:
     environment:
       FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-https://nerotechnology.online}
       AUTH_COOKIE_SECURE: "true"
-    ports:
-      - "127.0.0.1:8000:8000"
 
   frontend:
     ports:
