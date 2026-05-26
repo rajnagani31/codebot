@@ -227,7 +227,15 @@ async def chat(
                 payload["completed_at"] = final_message.completed_at.isoformat()
             yield encode_sse_event("message.failed", payload)
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 

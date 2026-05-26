@@ -65,5 +65,13 @@ async def event_generator(user_id: int):
 
 @router.get("/sse/trade/stream/{user_id}")
 async def notification_stream(user_id: int):
-    return StreamingResponse(event_generator(user_id), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(user_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
     # return {'yes':'yes'}
