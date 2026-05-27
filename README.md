@@ -28,3 +28,8 @@ memory-aware tools
 
 reasoning chain
 uvicorn backend.bot.application.main:app --reload --port 8001
+
+docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --build
+
+http://52.87.207.22:3000/
+http://52.87.207.22:8002/docs
