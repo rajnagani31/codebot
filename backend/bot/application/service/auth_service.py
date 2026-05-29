@@ -107,10 +107,11 @@ class AuthService:
         self._validate_email(normalized_email)
         self._validate_password(password)
 
-        existing_user = self.repository.get_user_by_email(normalized_email)
-        current = self._resolve_existing_principal(request)
+        existing_user = self.repository.get_user_by_email(normalized_email) # might be 1 user or None
+        current = self._resolve_existing_principal(request) # logged in user or None
         password_hash = self._hash_password(password)
-
+        print('existing_user:', existing_user.id if existing_user else None)
+        print('current:', current.id if current else None)
         if existing_user is not None and (
             current is None or existing_user.id != current.id
         ):
