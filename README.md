@@ -33,3 +33,23 @@ docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --build
 
 http://52.87.207.22:3000/
 http://52.87.207.22:8002/docs
+
+
+GitHub App
+    ↓
+Webhook (/api/webhook/github)
+    ↓
+Verify Signature
+    ↓
+pull_request.opened
+pull_request.synchronize
+    ↓
+GitHub API
+    ↓
+Fetch changed files
+    ↓
+LLM Review Engine
+    ↓
+Generate comments
+    ↓
+POST review to GitHub
