@@ -3,7 +3,7 @@ Model registry for PR Reviewer Agent
 """
 
 # Import Base from centralized database module
-from bot.application.core.database import Base
+from apps.backend.bot.application.core.database import Base
 
 # Import all PR reviewer models to register them with SQLAlchemy
 from .artifact_ref import ArtifactRef, ArtifactTypeEnum

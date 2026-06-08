@@ -7,7 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from .mixin import DateTimeMixin
 
 # Import Base from the centralized database module
-from bot.application.core.database import Base
+from apps.backend.bot.application.core.database import Base
 
 
 class ReviewReport(Base, DateTimeMixin):

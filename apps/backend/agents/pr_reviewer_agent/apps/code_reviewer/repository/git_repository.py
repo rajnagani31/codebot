@@ -1,4 +1,4 @@
-from agents.pr_reviewer_agent.apps.code_reviewer.model.pull_request import PullRequest
+from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.model.pull_request import PullRequest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 

@@ -1,5 +1,5 @@
-from agents.pr_reviewer_agent.apps.code_reviewer.repository.git_repository import CodeReviewRepository
-from agents.pr_reviewer_agent.apps.code_reviewer.schema.pr_schema import PullRequestData
+from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.repository.git_repository import CodeReviewRepository
+from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.schema.pr_schema import PullRequestData
 
 
 class CodeReviewService:

@@ -3,7 +3,7 @@ from sqlalchemy import BigInteger, DateTime, Enum as SQLEnum, Index, Integer, St
 from sqlalchemy.orm import Mapped, mapped_column
 from datetime import datetime
 # Import Base from the centralized database module
-from bot.application.core.database import Base
+from apps.backend.bot.application.core.database import Base
 from .mixin import DateTimeMixin
 
 

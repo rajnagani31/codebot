@@ -2,12 +2,12 @@ import json
 
 from fastapi import APIRouter, Depends, Request, HTTPException
 
-from bot.application.core.database import SessionLocal
+from apps.backend.bot.application.core.database import SessionLocal
 
 from ..webhook.verify_signature import verify_signature
 from dotenv import load_dotenv
-from agents.pr_reviewer_agent.apps.code_reviewer.repository.git_repository import CodeReviewRepository
-from agents.pr_reviewer_agent.apps.code_reviewer.service.git_service import CodeReviewService
+from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.repository.git_repository import CodeReviewRepository
+from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.service.git_service import CodeReviewService
 
 
 load_dotenv()
@@ -22,6 +22,7 @@ def get_code_review_service():
 
 @router.post("/webhook/github")
 async def github_webhook(request: Request, code_review_service: CodeReviewService = Depends(get_code_review_service)):
+
     payload = await request.body()
     print(dict(request.headers))
     print("SECRET:", os.getenv("GITHUB_WEBHOOK_SECRET"))
