@@ -5,7 +5,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 import os
 from datetime import datetime
 from dotenv import load_dotenv
-
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 load_dotenv()
 
 
