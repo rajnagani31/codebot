@@ -8,8 +8,8 @@ from ..webhook.verify_signature import verify_signature
 from dotenv import load_dotenv
 from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.repository.git_repository import CodeReviewRepository
 from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.service.git_service import CodeReviewService
-
-
+from apps.backend.bot.application.dependencies.auth import get_current_user
+from fastapi import Depends
 load_dotenv()
 
 import os
@@ -21,8 +21,14 @@ def get_code_review_service():
     return CodeReviewService(CodeReviewRepository(SessionLocal))
 
 @router.post("/webhook/github")
-async def github_webhook(request: Request, code_review_service: CodeReviewService = Depends(get_code_review_service)):
+async def github_webhook(
+    request: Request,
+    current_user = Depends(get_current_user),
+    code_review_service: CodeReviewService = Depends(get_code_review_service),
+    ):
 
+
+    print('current_user->',current_user)
     payload = await request.body()
     print(dict(request.headers))
     print("SECRET:", os.getenv("GITHUB_WEBHOOK_SECRET"))
@@ -31,7 +37,7 @@ async def github_webhook(request: Request, code_review_service: CodeReviewServic
 
     
     secret = os.getenv("GITHUB_WEBHOOK_SECRET")
-    if not verify_signature(request.headers, payload, secret):
+    if not verify_signature(request.headers, payload, secret): # type: ignore
 
         raise HTTPException(status_code=401, detail="Invalid signature")
     print('type(payload):', type(payload))

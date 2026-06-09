@@ -12,6 +12,26 @@ class CodeReviewRepository:
         try:
             # closed = 'closed'
             # Convert pr_data dict to PullRequest model instance
+
+            # Check Pr is available or not
+            existing_pr = session.execute(
+            select(PullRequest).where(
+                PullRequest.pr_number == pr_data.pr_number
+                        )
+            ).scalar_one_or_none()
+
+            if existing_pr:
+                existing_pr.commit_sha = pr_data.commit_sha
+                existing_pr.state = pr_data.state
+                existing_pr.title = pr_data.title
+                existing_pr.description = pr_data.description
+                existing_pr.closed_at = pr_data.closed_at
+                existing_pr.merged_at = pr_data.merged_at
+
+                session.commit()
+                session.refresh(existing_pr)
+                return existing_pr
+
             pr_instance = PullRequest(
                 repo_id=pr_data.repo_id,
                 pr_number=pr_data.pr_number,

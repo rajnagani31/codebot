@@ -1,5 +1,5 @@
 from enum import Enum
-from sqlalchemy import BigInteger, DateTime, Enum as SQLEnum, Index, Integer, String, UniqueConstraint, MetaData
+from sqlalchemy import BigInteger, DateTime, Enum as SQLEnum, ForeignKey, Index, Integer, String, UniqueConstraint, MetaData
 from sqlalchemy.orm import Mapped, mapped_column
 from datetime import datetime
 # Import Base from the centralized database module
@@ -22,6 +22,8 @@ class PullRequest(Base, DateTimeMixin):
     __metadata__ = MetaData(info={"schema_disc": "is root aggregate for pr context"})
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user_details.id", ondelete = "CASCADE"), nullable=True)
+    # repo_id: Mapped[int] = mapped_column(ForeignKey("repositories.id", ondelete = "CASCADE"), nullable=True)
     repo_id: Mapped[int] = mapped_column(Integer, nullable=True)
     pr_number: Mapped[int] = mapped_column(Integer, nullable=True)
     commit_sha: Mapped[str] = mapped_column(String(64), nullable=True)

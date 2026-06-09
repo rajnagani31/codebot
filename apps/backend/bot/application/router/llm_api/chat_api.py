@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from ...config import SessionLocal
-from ...dependencies.auth import get_auth_service, require_current_user
+from ...dependencies.auth import get_auth_service, get_current_user
 from ...repository.chat_repository import ChatRepository
 from ...schema.chat_schema import (
     ChatStreamRequest,
@@ -39,7 +39,7 @@ def encode_sse_event(event_name: str, payload: dict) -> str:
 @router.post("/chat/stream")
 async def chat(
     request: ChatStreamRequest,
-    current_user=Depends(require_current_user),
+    current_user=Depends(get_current_user),
     chat_service: ChatService = Depends(get_chat_service),
     auth_service: AuthService = Depends(get_auth_service),
 ):
@@ -252,7 +252,7 @@ class SQLAlchemyTestRequest(BaseModel):
 @router.post("/chat/stream/test")
 async def chat_test(
     user: str,
-    # current_user=Depends(require_current_user),
+    # current_user=Depends(get_current_user),
 ):
     # Fiter in SqlAlchemy model to get user details based on email or username
     session = SessionLocal()

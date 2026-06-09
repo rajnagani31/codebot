@@ -11,11 +11,12 @@ class CodeReviewService:
             *,
             payload : dict
         ) :
+        print('pr here-----')
+
 
         pr = payload['pull_request']
-
         pr_data = PullRequestData(
-            repo_id=pr['base']['repo']['id'],
+            repo_id=pr['base']['repo']['id'],   
             pr_number=pr['number'],
             commit_sha=pr['head']['sha'],
             author=pr['user']['login'],
