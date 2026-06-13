@@ -37,8 +37,7 @@ class CodeReviewService:
             case PullRequestAction.CLOSED:
                 print('case CLOSED',PullRequestAction.CLOSED.value)
                 return self.repository.save_pull_request(
-                    pr_data,
-                    payload["pull_request"]["merged"]
+                    pr_data
                 )
 
             case PullRequestAction.UNKNOWN:
