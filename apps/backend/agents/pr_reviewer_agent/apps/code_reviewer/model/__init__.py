@@ -11,6 +11,6 @@ from .pull_request import PullRequest, PRStateEnum
 from .review_finding import ReviewFinding, FindingSeverityEnum
 from .review_job import ReviewJob, ReviewJobStatusEnum
 from .review_report import ReviewReport
-
+from .repository import Repository
 # Export Base for Alembic
 __all__ = ['Base']
