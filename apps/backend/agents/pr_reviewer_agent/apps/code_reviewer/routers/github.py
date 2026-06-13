@@ -20,6 +20,11 @@ router = APIRouter()
 def get_code_review_service():
     return CodeReviewService(CodeReviewRepository(SessionLocal))
 
+router = APIRouter()
+
+def get_code_review_service():
+    return CodeReviewService(CodeReviewRepository(SessionLocal))
+
 @router.post("/webhook/github")
 async def github_webhook(request: Request, code_review_service: CodeReviewService = Depends(get_code_review_service)):
 
