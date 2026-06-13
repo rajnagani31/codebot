@@ -15,10 +15,7 @@ load_dotenv()
 import os
 
 
-router = APIRouter()
 
-def get_code_review_service():
-    return CodeReviewService(CodeReviewRepository(SessionLocal))
 
 router = APIRouter()
 
