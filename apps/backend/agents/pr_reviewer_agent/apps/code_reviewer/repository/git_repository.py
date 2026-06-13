@@ -22,8 +22,8 @@ class CodeReviewRepository:
                 description=pr_data.description,
                 source_branch=pr_data.source_branch,
                 target_branch=pr_data.target_branch,
-                url=pr_data.url ,
-                closed_at=pr_data.closed_at ,
+                url=pr_data.url,
+                closed_at=pr_data.closed_at,
                 merged_at=pr_data.merged_at
             )
             # pr_data = PullRequest(**pr_data)
