@@ -1,8 +1,9 @@
 from .mixin import DateTimeMixin
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import BigInteger, Integer, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from apps.backend.bot.application.core.database import Base
-
+import uuid
 
 
 class Repository(Base, DateTimeMixin):

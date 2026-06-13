@@ -14,3 +14,6 @@ class PullRequestData(BaseModel):
     url: str
     closed_at: datetime | None
     merged_at: datetime | None
+    full_name: str | None = None
+    owner: str | None = None
+    default_branch: str | None = None

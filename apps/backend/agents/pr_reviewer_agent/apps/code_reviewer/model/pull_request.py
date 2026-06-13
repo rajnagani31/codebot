@@ -23,8 +23,7 @@ class PullRequest(Base, DateTimeMixin):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("user_details.id", ondelete = "CASCADE"), nullable=True)
-    # repo_id: Mapped[int] = mapped_column(ForeignKey("repositories.id", ondelete = "CASCADE"), nullable=True)
-    repo_id: Mapped[int] = mapped_column(Integer, nullable=True)
+    repo_id: Mapped[int] = mapped_column(ForeignKey("repositories.id", ondelete = "CASCADE"), nullable=True)
     pr_number: Mapped[int] = mapped_column(Integer, nullable=True)
     commit_sha: Mapped[str] = mapped_column(String(64), nullable=True)
     author: Mapped[str] = mapped_column(String(255), nullable=True)

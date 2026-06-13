@@ -1,4 +1,6 @@
+from itertools import count
 import json
+from operator import countOf
 
 from fastapi import APIRouter, Depends, Request, HTTPException
 
@@ -10,6 +12,7 @@ from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.repository.git_rep
 from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.service.git_service import CodeReviewService
 from apps.backend.bot.application.dependencies.auth import get_current_user
 from fastapi import Depends
+from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.service.pr_resolver import PrResolver
 load_dotenv()
 
 import os
@@ -23,14 +26,13 @@ def get_code_review_service():
 @router.post("/webhook/github")
 async def github_webhook(
     request: Request,
-    current_user = Depends(get_current_user),
+    current_user = 1,
     code_review_service: CodeReviewService = Depends(get_code_review_service),
     ):
 
-
-    print('current_user->',current_user)
+    count = 0
     payload = await request.body()
-    print(dict(request.headers))
+
     print("SECRET:", os.getenv("GITHUB_WEBHOOK_SECRET"))
     print("HEADER:", request.headers.get("X-Hub-Signature-256"))
     print("Installation:",request.headers.get("installation"))
@@ -44,22 +46,23 @@ async def github_webhook(
 
     # dict data print
     payload_dict = json.loads(payload)
-    print(json.dumps(payload_dict, indent=4))
+    # print(json.dumps(payload_dict, indent=4))
     with open("payload.json", "w") as f:
         json.dump(payload_dict, f, indent=4)
-    # call service to process the webhook event as dict paload
-    code_review_service.create_pull_request(payload=payload_dict)
+
+    # resolver
+    resolver = PrResolver()
+    action = resolver.resolver(payload=payload_dict)
     
+    # call service to process the webhook event as dict paload
+    code_review_service.process_webhook(payload=payload_dict, action=action)
     # TODO: Process the webhook event
     # For now, just return a success response
+    print('pr count', count)
     return {"status": "webhook received"}
 
 
 # action is pending
-
-
-
-
 
 
 
