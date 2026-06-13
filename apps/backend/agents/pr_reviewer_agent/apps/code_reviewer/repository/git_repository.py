@@ -101,5 +101,5 @@ class CodeReviewRepository:
             return pr_instance
 
         except Exception as e:
-            raise f'ERROR {e}'
+            raise RuntimeError(f'ERROR {e}') from e
             

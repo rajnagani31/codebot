@@ -1,18 +1,18 @@
 {
-    "action": "ready_for_review",
-    "number": 38,
+    "action": "edited",
+    "number": 31,
     "pull_request": {
-        "url": "https://api.github.com/repos/rajnagani31/codebot/pulls/38",
-        "id": 3856553770,
-        "node_id": "PR_kwDOSDERBs7l3lcq",
-        "html_url": "https://github.com/rajnagani31/codebot/pull/38",
-        "diff_url": "https://github.com/rajnagani31/codebot/pull/38.diff",
-        "patch_url": "https://github.com/rajnagani31/codebot/pull/38.patch",
-        "issue_url": "https://api.github.com/repos/rajnagani31/codebot/issues/38",
-        "number": 38,
+        "url": "https://api.github.com/repos/rajnagani31/codebot/pulls/31",
+        "id": 3825878390,
+        "node_id": "PR_kwDOSDERBs7kCkV2",
+        "html_url": "https://github.com/rajnagani31/codebot/pull/31",
+        "diff_url": "https://github.com/rajnagani31/codebot/pull/31.diff",
+        "patch_url": "https://github.com/rajnagani31/codebot/pull/31.patch",
+        "issue_url": "https://api.github.com/repos/rajnagani31/codebot/issues/31",
+        "number": 31,
         "state": "open",
         "locked": false,
-        "title": "test coderabbit",
+        "title": "action start",
         "user": {
             "login": "rajnagani31",
             "id": 203210103,
@@ -34,49 +34,27 @@
             "user_view_type": "public",
             "site_admin": false
         },
-        "body": "<!-- This is an auto-generated comment: release notes by coderabbit.ai -->\n## Summary by CodeRabbit\n\n* **Tests**\n  * Demo test service now verifies incoming request signatures using HMAC-SHA256 to ensure payload authenticity.\n* **Refactor**\n  * Pull request handling refactored to an action-driven webhook processor with expanded PR metadata and handling for open/close/sync events.\n<!-- end of auto-generated comment: release notes by coderabbit.ai -->\n\n<!-- greptile_comment -->\n\n<details open><summary><h3>Greptile Summary</h3></summary>\n\nThis PR refactors the webhook service to dispatch on PR action type via a `match` statement, fixes the signature verification payload type from `str` to `bytes`, and adds a demo test file. However, the changes introduce several critical defects that leave the entire webhook pipeline broken end-to-end.\n\n- **`git_service.py`**: The whole `CodeReviewService` class is duplicated verbatim (lines 73\u2013140 mirror lines 1\u201368); additionally `process_webhook` calls `self.repository.save_pull_request()` which does not exist on `CodeReviewRepository` (only `create_pull_request` is defined), and `ast.Str` is imported \u2014 a symbol removed in Python 3.12.\n- **`routers/github.py`**: Still calls the deleted `code_review_service.create_pull_request()` method and omits the required `action` keyword argument, so every webhook delivery raises `AttributeError`.\n- **`verify_signature.py`**: The `bytes` type fix here is correct and isolated.\n</details>\n\n\n<details open><summary><h3>Confidence Score: 1/5</h3></summary>\n\nNot safe to merge \u2014 the webhook endpoint is completely non-functional due to multiple broken method call chains.\n\nThe router calls a service method that was deleted in this same PR, and the new service method calls a repository method that has never existed. Both mismatches raise AttributeError on every real webhook delivery, meaning no PR event can be processed at all. The service file is also duplicated verbatim, compounding the maintenance risk.\n\ngit_service.py and routers/github.py both need attention before this is mergeable.\n</details>\n\n\n<details open><summary><h3>Important Files Changed</h3></summary>\n\n\n\n\n| Filename | Overview |\n|----------|----------|\n| apps/backend/agents/pr_reviewer_agent/apps/code_reviewer/service/git_service.py | Refactored service with new process_webhook/action routing, but has three critical defects: entire class duplicated verbatim (lines 73\u2013140), calls non-existent repository.save_pull_request(), and imports removed ast.Str (crashes on Python 3.12+). |\n| apps/backend/agents/pr_reviewer_agent/apps/code_reviewer/routers/github.py | Only whitespace added; still calls the deleted create_pull_request method on the service and omits the required action argument \u2014 every webhook returns a 500. |\n| apps/backend/agents/pr_reviewer_agent/apps/code_reviewer/webhook/verify_signature.py | Correct fix: payload parameter type changed from str to bytes so hmac.new() receives a bytes-like object as required. |\n| apps/backend/agents/pr_reviewer_agent/apps/code_reviewer/repository/git_repository.py | Removed unused SQLAlchemy imports (create_engine, select, Session); no functional change, but still only exposes create_pull_request while the service now calls save_pull_request. |\n| apps/backend/agents/test/demo.py | New test copy of verify_signature with payload typed as str instead of bytes, making hmac.new() raise TypeError on every call. |\n\n</details>\n\n\n</details>\n\n\n<details open><summary><h3>Sequence Diagram</h3></summary>\n\n```mermaid\nsequenceDiagram\n    participant GH as GitHub\n    participant Router as github.py router\n    participant Sig as verify_signature.py\n    participant Svc as CodeReviewService\n    participant Repo as CodeReviewRepository\n\n    GH->>Router: POST /webhook/github (bytes payload)\n    Router->>Sig: verify_signature(headers, payload: bytes, secret)\n    Sig-->>Router: bool (fixed in this PR)\n    Router->>Svc: \"create_pull_request(payload=payload_dict) method deleted - AttributeError\"\n    Note over Router,Svc: Should call process_webhook(payload=..., action=...)\n    Svc->>Svc: _build_pr_data(payload)\n    Svc->>Svc: match action (PullRequestAction)\n    Svc->>Repo: save_pull_request(pr_data) method does not exist - AttributeError\n    Note over Svc,Repo: Repository only defines create_pull_request()\n```\n</details>\n\n\n<!-- greptile_failed_comments -->\n<details open><summary><h3>Comments Outside Diff (2)</h3></summary>\n\n1. `apps/backend/agents/pr_reviewer_agent/apps/code_reviewer/routers/github.py`, line 47 ([link](https://github.com/rajnagani31/codebot/blob/6ad442cf61e36f4ee0f1943d3e776da906203423/apps/backend/agents/pr_reviewer_agent/apps/code_reviewer/routers/github.py#L47)) \n\n   <a href=\"#\"><img alt=\"P0\" src=\"https://greptile-static-assets.s3.amazonaws.com/badges/p0.svg?v=9\" align=\"top\"></a> **Method call doesn't match renamed service method**\n\n   `create_pull_request` no longer exists on `CodeReviewService` \u2014 it was renamed to `process_webhook` in this same PR. Calling the old name raises `AttributeError` on every webhook delivery, making the endpoint completely broken. Additionally, `process_webhook` requires the keyword-only argument `action`, which is also missing from this call site.\n\n2. `apps/backend/agents/pr_reviewer_agent/apps/code_reviewer/routers/github.py`, line 47 ([link](https://github.com/rajnagani31/codebot/blob/2be1a1ca383ca31d8f99994c5efb729032e30403/apps/backend/agents/pr_reviewer_agent/apps/code_reviewer/routers/github.py#L47)) \n\n   <a href=\"#\"><img alt=\"P0\" src=\"https://greptile-static-assets.s3.amazonaws.com/badges/p0.svg?v=9\" align=\"top\"></a> **Stale method name + missing required argument**\n\n   `create_pull_request` no longer exists on `CodeReviewService` \u2014 it was renamed to `process_webhook` in this same PR. Every incoming webhook delivery will raise `AttributeError` and return a 500. Additionally, `process_webhook` requires the keyword-only argument `action` (sourced from `payload_dict.get(\"action\")`), which is also absent from this call site.\n</details>\n\n<!-- /greptile_failed_comments -->\n\n<sub>Reviews (15): Last reviewed commit: [\"test-1\"](https://github.com/rajnagani31/codebot/commit/e44ee5cedd5b090742c1b37f65016319161cace4) | [Re-trigger Greptile](https://app.greptile.com/api/retrigger?id=37279562)</sub>\n\n> Greptile also left **1 inline comment** on this PR.\n\n<!-- /greptile_comment -->",
-        "created_at": "2026-06-12T17:55:07Z",
-        "updated_at": "2026-06-13T11:23:34Z",
+        "body": "<!-- This is an auto-generated comment: release notes by coderabbit.ai -->\n\n## Summary by CodeRabbit\n\n* **New Features**\n  - Repository tracking now linked to pull requests and user accounts\n  - GitHub webhook endpoint requires authentication for security\n  - Pull request action management system supporting approve and request changes workflows\n\n* **Bug Fixes**\n  - Enhanced pull request creation to prevent duplicate records\n\n* **Database**\n  - Added cascade delete constraints for improved data integrity\n\n<!-- end of auto-generated comment: release notes by coderabbit.ai -->\n\n<!-- greptile_comment -->\n\n<details open><summary><h3>Greptile Summary</h3></summary>\n\nThis PR adds action-based GitHub webhook dispatch, a new `Repository` model linked to `user_details`, duplicate-PR prevention via upsert logic, and cascade-delete migrations. Several renames (`require_current_user` \u2192 `get_current_user`) are cleanly propagated.\n\n- **Webhook dispatch** (`git_service.py`, `pr_resolver.py`): A `match` statement routes on `PullRequestAction`, but `ast.Str` (removed in Python 3.12) is imported, the CLOSED case passes a second argument to `save_pull_request` which only accepts one, and `PrResolver` returns a raw string instead of a `PullRequestAction` enum value.\n- **Repository layer** (`git_repository.py`): Upsert logic is structurally sound, but `raise f'ERROR {e}'` in `get_pull_request` raises a string (invalid \u2014 masks the real exception), and `user_id` is hardcoded to `1` in every auto-created repository row.\n- **Debug artifacts**: A live webhook payload (`payload.json`) was committed to source control, and the router writes each incoming payload to disk on every request \u2014 both should be removed before merging.\n</details>\n\n<details open><summary><h3>Confidence Score: 2/5</h3></summary>\n\nNot safe to merge \u2014 the webhook pipeline has three separate runtime crashes before a single PR event can be processed end-to-end.\n\nThe module-level `from ast import Str` import fails on Python 3.12+, preventing the application from starting. Even on earlier Python versions, every closed-PR webhook raises `TypeError` because `save_pull_request` is called with an unexpected second argument. Any SQLAlchemy error inside `get_pull_request` additionally crashes with a `TypeError` from raising a string. All three failures are on the hot path triggered by every webhook delivery.\n\n`git_service.py`, `git_repository.py`, and `pr_resolver.py` all need fixes before the webhook pipeline can function. `payload.json` should be removed from the repository and added to `.gitignore`.\n</details>\n\n<details open><summary><h3>Security Review</h3></summary>\n\n- **Webhook payload leaked to disk and source control** (`routers/github.py` line 50, `payload.json`): Every webhook delivery overwrites `payload.json` in the working directory with the full raw payload, and a real payload was committed to the repository containing real GitHub user IDs and internal review commentary.\n- **Misleading auth parameter** (`routers/github.py` line 29): `current_user = 1` is a plain integer default, not a FastAPI `Depends()` call \u2014 `get_current_user` is imported but never wired. HMAC signature verification is the actual security gate, but the parameter creates a false impression of user-level authentication.\n</details>\n\n<details open><summary><h3>Important Files Changed</h3></summary>\n\n| Filename | Overview |\n|----------|----------|\n| apps/backend/agents/pr_reviewer_agent/apps/code_reviewer/service/git_service.py | Refactored to action-based dispatch via match statement, but imports the removed `ast.Str` (Python 3.12 ImportError), calls `save_pull_request` with two arguments for the CLOSED case (TypeError), and contains dead handler methods calling non-existent repository methods. |\n| apps/backend/agents/pr_reviewer_agent/apps/code_reviewer/service/pr_resolver.py | New resolver for PR action dispatch, but `_pr_action_normalize_choice` returns a raw string instead of a `PullRequestAction` enum value, meaning unknown webhook actions bypass the UNKNOWN fallback case. |\n| apps/backend/agents/pr_reviewer_agent/apps/code_reviewer/routers/github.py | Adds action-based dispatch and signature verification, but `current_user = 1` is a plain integer default (not a Depends), webhook payload is written to disk on every request, and unused imports clutter the file. |\n| apps/backend/agents/pr_reviewer_agent/apps/code_reviewer/repository/git_repository.py | Introduces upsert logic for repositories and PRs, but `raise f'ERROR {e}'` in `get_pull_request` raises a string (TypeError) instead of an exception, and `user_id` is hardcoded to 1 in `get_or_create_repository`. |\n| apps/backend/agents/pr_reviewer_agent/apps/code_reviewer/model/repository.py | New `Repository` SQLAlchemy model with foreign key to `user_details` and cascade delete; structurally sound. |\n| apps/backend/agents/pr_reviewer_agent/apps/code_reviewer/model/mixin.py | Changes `created_at` and `updated_at` from `nullable=False` to `nullable=True` \u2014 a permissive workaround for migration issues that weakens data integrity guarantees on timestamp columns. |\n| payload.json | A live GitHub webhook payload containing real user IDs, PR body text, and internal Greptile review comments was committed to source control \u2014 this is debug output that should not be versioned. |\n| apps/backend/bot/application/dependencies/auth.py | Renames `require_current_user` to `get_current_user` \u2014 a safe rename propagated consistently across all call sites. |\n\n</details>\n\n</details>\n\n<details open><summary><h3>Sequence Diagram</h3></summary>\n\n```mermaid\nsequenceDiagram\n    participant GH as GitHub\n    participant Router as github.py\n    participant Sig as verify_signature\n    participant Resolver as PrResolver\n    participant Svc as CodeReviewService\n    participant Repo as CodeReviewRepository\n    participant DB as PostgreSQL\n\n    GH->>Router: POST /webhook/github (bytes payload)\n    Router->>Sig: verify_signature(headers, payload, secret)\n    Sig-->>Router: bool (HMAC check)\n    Router->>Router: write payload.json to disk \u26a0\ufe0f debug artifact\n    Router->>Resolver: resolver(payload_dict)\n    Note over Resolver: Returns raw str, not PullRequestAction \u26a0\ufe0f\n    Resolver-->>Router: action (str)\n    Router->>Svc: process_webhook(payload, action)\n    Svc->>Svc: _build_pr_data(payload)\n    Svc->>Svc: match action\n    alt \"action == closed\"\n        Svc->>Repo: save_pull_request(pr_data, merged) \u26a0\ufe0f TypeError\n    else \"action == opened / synchronize / etc.\"\n        Svc->>Repo: save_pull_request(pr_data)\n        Repo->>DB: SELECT Repository WHERE repo_id + is_active\n        DB-->>Repo: existing or None\n        alt not found\n            Repo->>DB: \"INSERT Repository (user_id=1 hardcoded \u26a0\ufe0f)\"\n        end\n        Repo->>DB: SELECT PullRequest WHERE repo_id + pr_number\n        DB-->>Repo: existing or None\n        alt not found\n            Repo->>DB: INSERT PullRequest\n        else found\n            Repo->>DB: UPDATE commit_sha/state/title\n        end\n        DB-->>Repo: committed PR\n        Repo-->>Svc: PullRequest\n    end\n    Svc-->>Router: PullRequest or None\n    Router-->>GH: status webhook received\n```\n</details>\n\n<sub>Reviews (1): Last reviewed commit: [\"feat: git action via process\\_wenhook and...\"](https://github.com/rajnagani31/codebot/commit/47679c9f19e8beb48d20d96fc14bea7d2b4d0763) | [Re-trigger Greptile](https://app.greptile.com/api/retrigger?id=37265986)</sub>\n\n> Greptile also left **9 inline comments** on this PR.\n\n<!-- /greptile_comment -->",
+        "created_at": "2026-06-08T18:26:56Z",
+        "updated_at": "2026-06-13T11:33:53Z",
         "closed_at": null,
         "merged_at": null,
-        "merge_commit_sha": "fc79e93dfaef91f0f148c90fed10c5fe3679d912",
-        "assignees": [
-            {
-                "login": "rajnagani31",
-                "id": 203210103,
-                "node_id": "U_kgDODBy9dw",
-                "avatar_url": "https://avatars.githubusercontent.com/u/203210103?v=4",
-                "gravatar_id": "",
-                "url": "https://api.github.com/users/rajnagani31",
-                "html_url": "https://github.com/rajnagani31",
-                "followers_url": "https://api.github.com/users/rajnagani31/followers",
-                "following_url": "https://api.github.com/users/rajnagani31/following{/other_user}",
-                "gists_url": "https://api.github.com/users/rajnagani31/gists{/gist_id}",
-                "starred_url": "https://api.github.com/users/rajnagani31/starred{/owner}{/repo}",
-                "subscriptions_url": "https://api.github.com/users/rajnagani31/subscriptions",
-                "organizations_url": "https://api.github.com/users/rajnagani31/orgs",
-                "repos_url": "https://api.github.com/users/rajnagani31/repos",
-                "events_url": "https://api.github.com/users/rajnagani31/events{/privacy}",
-                "received_events_url": "https://api.github.com/users/rajnagani31/received_events",
-                "type": "User",
-                "user_view_type": "public",
-                "site_admin": false
-            }
-        ],
+        "merge_commit_sha": "acba19f3fb54d8d742c1ab063d3319d22e18b704",
+        "assignees": [],
         "requested_reviewers": [],
         "requested_teams": [],
         "labels": [],
         "milestone": null,
-        "draft": false,
-        "commits_url": "https://api.github.com/repos/rajnagani31/codebot/pulls/38/commits",
-        "review_comments_url": "https://api.github.com/repos/rajnagani31/codebot/pulls/38/comments",
+        "draft": true,
+        "commits_url": "https://api.github.com/repos/rajnagani31/codebot/pulls/31/commits",
+        "review_comments_url": "https://api.github.com/repos/rajnagani31/codebot/pulls/31/comments",
         "review_comment_url": "https://api.github.com/repos/rajnagani31/codebot/pulls/comments{/number}",
-        "comments_url": "https://api.github.com/repos/rajnagani31/codebot/issues/38/comments",
-        "statuses_url": "https://api.github.com/repos/rajnagani31/codebot/statuses/017cbb94bae65d18d881ceac47e34709b3c34832",
+        "comments_url": "https://api.github.com/repos/rajnagani31/codebot/issues/31/comments",
+        "statuses_url": "https://api.github.com/repos/rajnagani31/codebot/statuses/47679c9f19e8beb48d20d96fc14bea7d2b4d0763",
         "head": {
-            "label": "rajnagani31:w-3",
-            "ref": "w-3",
-            "sha": "017cbb94bae65d18d881ceac47e34709b3c34832",
+            "label": "rajnagani31:nero-18",
+            "ref": "nero-18",
+            "sha": "47679c9f19e8beb48d20d96fc14bea7d2b4d0763",
             "user": {
                 "login": "rajnagani31",
                 "id": 203210103,
@@ -167,7 +145,7 @@
                 "deployments_url": "https://api.github.com/repos/rajnagani31/codebot/deployments",
                 "created_at": "2026-04-15T06:20:16Z",
                 "updated_at": "2026-06-08T16:43:28Z",
-                "pushed_at": "2026-06-13T11:21:42Z",
+                "pushed_at": "2026-06-13T11:29:09Z",
                 "git_url": "git://github.com/rajnagani31/codebot.git",
                 "ssh_url": "git@github.com:rajnagani31/codebot.git",
                 "clone_url": "https://github.com/rajnagani31/codebot.git",
@@ -307,7 +285,7 @@
                 "deployments_url": "https://api.github.com/repos/rajnagani31/codebot/deployments",
                 "created_at": "2026-04-15T06:20:16Z",
                 "updated_at": "2026-06-08T16:43:28Z",
-                "pushed_at": "2026-06-13T11:21:42Z",
+                "pushed_at": "2026-06-13T11:29:09Z",
                 "git_url": "git://github.com/rajnagani31/codebot.git",
                 "ssh_url": "git@github.com:rajnagani31/codebot.git",
                 "clone_url": "https://github.com/rajnagani31/codebot.git",
@@ -355,66 +333,51 @@
         },
         "_links": {
             "self": {
-                "href": "https://api.github.com/repos/rajnagani31/codebot/pulls/38"
+                "href": "https://api.github.com/repos/rajnagani31/codebot/pulls/31"
             },
             "html": {
-                "href": "https://github.com/rajnagani31/codebot/pull/38"
+                "href": "https://github.com/rajnagani31/codebot/pull/31"
             },
             "issue": {
-                "href": "https://api.github.com/repos/rajnagani31/codebot/issues/38"
+                "href": "https://api.github.com/repos/rajnagani31/codebot/issues/31"
             },
             "comments": {
-                "href": "https://api.github.com/repos/rajnagani31/codebot/issues/38/comments"
+                "href": "https://api.github.com/repos/rajnagani31/codebot/issues/31/comments"
             },
             "review_comments": {
-                "href": "https://api.github.com/repos/rajnagani31/codebot/pulls/38/comments"
+                "href": "https://api.github.com/repos/rajnagani31/codebot/pulls/31/comments"
             },
             "review_comment": {
                 "href": "https://api.github.com/repos/rajnagani31/codebot/pulls/comments{/number}"
             },
             "commits": {
-                "href": "https://api.github.com/repos/rajnagani31/codebot/pulls/38/commits"
+                "href": "https://api.github.com/repos/rajnagani31/codebot/pulls/31/commits"
             },
             "statuses": {
-                "href": "https://api.github.com/repos/rajnagani31/codebot/statuses/017cbb94bae65d18d881ceac47e34709b3c34832"
+                "href": "https://api.github.com/repos/rajnagani31/codebot/statuses/47679c9f19e8beb48d20d96fc14bea7d2b4d0763"
             }
         },
         "author_association": "OWNER",
         "auto_merge": null,
-        "assignee": {
-            "login": "rajnagani31",
-            "id": 203210103,
-            "node_id": "U_kgDODBy9dw",
-            "avatar_url": "https://avatars.githubusercontent.com/u/203210103?v=4",
-            "gravatar_id": "",
-            "url": "https://api.github.com/users/rajnagani31",
-            "html_url": "https://github.com/rajnagani31",
-            "followers_url": "https://api.github.com/users/rajnagani31/followers",
-            "following_url": "https://api.github.com/users/rajnagani31/following{/other_user}",
-            "gists_url": "https://api.github.com/users/rajnagani31/gists{/gist_id}",
-            "starred_url": "https://api.github.com/users/rajnagani31/starred{/owner}{/repo}",
-            "subscriptions_url": "https://api.github.com/users/rajnagani31/subscriptions",
-            "organizations_url": "https://api.github.com/users/rajnagani31/orgs",
-            "repos_url": "https://api.github.com/users/rajnagani31/repos",
-            "events_url": "https://api.github.com/users/rajnagani31/events{/privacy}",
-            "received_events_url": "https://api.github.com/users/rajnagani31/received_events",
-            "type": "User",
-            "user_view_type": "public",
-            "site_admin": false
-        },
+        "assignee": null,
         "active_lock_reason": null,
         "merged": false,
         "mergeable": true,
         "rebaseable": true,
         "mergeable_state": "clean",
         "merged_by": null,
-        "comments": 2,
-        "review_comments": 13,
+        "comments": 1,
+        "review_comments": 19,
         "maintainer_can_modify": false,
-        "commits": 15,
-        "additions": 153,
-        "deletions": 27,
-        "changed_files": 6
+        "commits": 3,
+        "additions": 1076,
+        "deletions": 105,
+        "changed_files": 21
+    },
+    "changes": {
+        "body": {
+            "from": "\n\n<!-- This is an auto-generated comment: release notes by coderabbit.ai -->\n\n## Summary by CodeRabbit\n\n* **New Features**\n  - Repository tracking now linked to pull requests and user accounts\n  - GitHub webhook endpoint requires authentication for security\n  - Pull request action management system supporting approve and request changes workflows\n\n* **Bug Fixes**\n  - Enhanced pull request creation to prevent duplicate records\n\n* **Database**\n  - Added cascade delete constraints for improved data integrity\n\n<!-- end of auto-generated comment: release notes by coderabbit.ai -->"
+        }
     },
     "repository": {
         "id": 1211175174,
@@ -485,7 +448,7 @@
         "deployments_url": "https://api.github.com/repos/rajnagani31/codebot/deployments",
         "created_at": "2026-04-15T06:20:16Z",
         "updated_at": "2026-06-08T16:43:28Z",
-        "pushed_at": "2026-06-13T11:21:42Z",
+        "pushed_at": "2026-06-13T11:29:09Z",
         "git_url": "git://github.com/rajnagani31/codebot.git",
         "ssh_url": "git@github.com:rajnagani31/codebot.git",
         "clone_url": "https://github.com/rajnagani31/codebot.git",
@@ -520,23 +483,23 @@
         "default_branch": "develop"
     },
     "sender": {
-        "login": "rajnagani31",
-        "id": 203210103,
-        "node_id": "U_kgDODBy9dw",
-        "avatar_url": "https://avatars.githubusercontent.com/u/203210103?v=4",
+        "login": "greptile-apps[bot]",
+        "id": 165735046,
+        "node_id": "BOT_kgDOCeDqhg",
+        "avatar_url": "https://avatars.githubusercontent.com/in/867647?v=4",
         "gravatar_id": "",
-        "url": "https://api.github.com/users/rajnagani31",
-        "html_url": "https://github.com/rajnagani31",
-        "followers_url": "https://api.github.com/users/rajnagani31/followers",
-        "following_url": "https://api.github.com/users/rajnagani31/following{/other_user}",
-        "gists_url": "https://api.github.com/users/rajnagani31/gists{/gist_id}",
-        "starred_url": "https://api.github.com/users/rajnagani31/starred{/owner}{/repo}",
-        "subscriptions_url": "https://api.github.com/users/rajnagani31/subscriptions",
-        "organizations_url": "https://api.github.com/users/rajnagani31/orgs",
-        "repos_url": "https://api.github.com/users/rajnagani31/repos",
-        "events_url": "https://api.github.com/users/rajnagani31/events{/privacy}",
-        "received_events_url": "https://api.github.com/users/rajnagani31/received_events",
-        "type": "User",
+        "url": "https://api.github.com/users/greptile-apps%5Bbot%5D",
+        "html_url": "https://github.com/apps/greptile-apps",
+        "followers_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/followers",
+        "following_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/following{/other_user}",
+        "gists_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/subscriptions",
+        "organizations_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/orgs",
+        "repos_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/repos",
+        "events_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/received_events",
+        "type": "Bot",
         "user_view_type": "public",
         "site_admin": false
     },

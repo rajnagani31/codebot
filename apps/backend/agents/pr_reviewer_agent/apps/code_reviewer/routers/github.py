@@ -1,20 +1,13 @@
-from itertools import count
 import json
-from operator import countOf
-
 from fastapi import APIRouter, Depends, Request, HTTPException
-
 from apps.backend.bot.application.core.database import SessionLocal
-
 from ..webhook.verify_signature import verify_signature
 from dotenv import load_dotenv
 from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.repository.git_repository import CodeReviewRepository
 from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.service.git_service import CodeReviewService
-from apps.backend.bot.application.dependencies.auth import get_current_user
-from fastapi import Depends
+from apps.backend.bot.application.dependencies.auth import get_current_user # TODO: for auth 
 from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.service.pr_resolver import PrResolver
 load_dotenv()
-
 import os
 
 
@@ -26,7 +19,7 @@ def get_code_review_service():
 @router.post("/webhook/github")
 async def github_webhook(
     request: Request,
-    current_user = 1,
+    current_user = 1, # TODO : for auth
     code_review_service: CodeReviewService = Depends(get_code_review_service),
     ):
 

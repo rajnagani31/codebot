@@ -1,7 +1,6 @@
-from ast import Str
 from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.repository.git_repository import CodeReviewRepository
 from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.schema.pr_schema import PullRequestData
-from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.service.pr_resolver import PrResolver, PullRequestAction
+from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.service.pr_resolver import PullRequestAction
 
 class CodeReviewService:
     def __init__(self, repository : CodeReviewRepository):
@@ -80,51 +79,3 @@ class CodeReviewService:
             merged_at=pr.get("merged_at"),
             default_branch=default_branch,
         )
-
-
-    def handle_opened(
-        self,
-        pr_data: PullRequestData
-    ):
-        return self.repository.create_pr(pr_data)
-    
-    def handle_ready_for_review(
-        self,
-        pr_data: PullRequestData
-    ):
-        repo_id = pr_data.repo_id
-        pr_number = pr_data.pr_number
-        return self.repository.mark_ready_for_review(
-            repo_id,
-            pr_number
-        )
-    
-    def handle_synchronize(
-        self,
-        pr_data: PullRequestData
-    ):
-        pr_repo_id = pr_data.repo_id,
-        pr_number = pr_data.pr_number,
-        pr_commit_sha = pr_data.commit_sha
-        return self.repository.update_commit_sha(
-            pr_repo_id,
-            pr_number,
-            pr_commit_sha
-        )
-    
-
-    def handle_closed(
-        self,
-        pr_data: PullRequestData,
-        merged: bool
-    ):
-        if merged:
-            return self.repository.mark_merged(pr_data)
-
-        return self.repository.mark_closed(pr_data)
-    
-    def handle_reopened(
-        self,
-        pr_data: PullRequestData
-    ):
-        return self.repository.mark_reopened(pr_data)

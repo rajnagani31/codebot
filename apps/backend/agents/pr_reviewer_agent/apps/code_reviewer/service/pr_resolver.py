@@ -28,5 +28,7 @@ class PrResolver:
             self, 
             action_choice : PrChoiceResolverInput
     ) -> PullRequestAction:
-        
-        return action_choice.action
+        try:
+            return PullRequestAction(action_choice.action)
+        except ValueError:
+            return PullRequestAction.UNKNOWN
