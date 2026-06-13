@@ -27,9 +27,6 @@ async def github_webhook(request: Request, code_review_service: CodeReviewServic
 
     payload = await request.body()
     print(dict(request.headers))
-    print("SECRET:", os.getenv("GITHUB_WEBHOOK_SECRET"))
-    print("HEADER:", request.headers.get("X-Hub-Signature-256"))
-    print("Installation:",request.headers.get("installation"))
 
     
     secret = os.getenv("GITHUB_WEBHOOK_SECRET")
