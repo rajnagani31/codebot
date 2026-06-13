@@ -9,6 +9,7 @@ class CodeReviewRepository:
 
     def create_pull_request(self, pr_data):
         session = self.session_factory()
+        
         try:
             # closed = 'closed'
             # Convert pr_data dict to PullRequest model instance
