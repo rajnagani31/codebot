@@ -1,68 +1,18 @@
-# demo testcase
-from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.repository.git_repository import CodeReviewRepository
-from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.schema.pr_schema import PullRequestData
+import hmac
+import hashlib
 
 
-class CodeReviewService:
-    def __init__(self, repository : CodeReviewRepository):
-        self.repository = repository
 
-    def create_pull_request(
-            self,
-            *,
-            payload : dict
-        ) :
+def verify_signature(headers: dict, payload: str, secret: str) -> bool:
+    signature = headers.get("X-Hub-Signature-256")
 
-        pr = payload['pull_request']
-
-        pr_data = PullRequestData(
-            repo_id=pr['base']['repo']['id'],
-            pr_number=pr['number'],
-            commit_sha=pr['head']['sha'],
-            author=pr['user']['login'],
-            state=pr['state'],
-            title=pr['title'],
-            description=pr["head"]['repo']['description'],
-            source_branch=pr['head']['ref'],
-            target_branch=pr['base']['ref'],
-            url=pr['html_url'],
-            closed_at=pr.get('closed_at'),
-            merged_at=pr.get('merged_at')
-        )
-
-        return self.repository.create_pull_request(pr_data)
+    if not signature:
+        return False
     
-# demo testcase
-from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.repository.git_repository import CodeReviewRepository
-from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.schema.pr_schema import PullRequestData
+    expected_signature = "sha256=" + hmac.new(
+        secret.encode(),
+        payload,
+        hashlib.sha256
+    ).hexdigest()
 
-
-class CodeReviewService:
-    def __init__(self, repository : CodeReviewRepository):
-        self.repository = repository
-
-    def create_pull_request(
-            self,
-            *,
-            payload : dict
-        ) :
-
-        pr = payload['pull_request']
-
-        pr_data = PullRequestData(
-            repo_id=pr['base']['repo']['id'],
-            pr_number=pr['number'],
-            commit_sha=pr['head']['sha'],
-            author=pr['user']['login'],
-            state=pr['state'],
-            title=pr['title'],
-            description=pr["head"]['repo']['description'],
-            source_branch=pr['head']['ref'],
-            target_branch=pr['base']['ref'],
-            url=pr['html_url'],
-            closed_at=pr.get('closed_at'),
-            merged_at=pr.get('merged_at')
-        )
-
-        return self.repository.create_pull_request(pr_data)
-    
+    return hmac.compare_digest(signature, expected_signature)
