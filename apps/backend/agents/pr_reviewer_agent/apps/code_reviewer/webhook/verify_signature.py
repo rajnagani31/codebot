@@ -3,7 +3,7 @@ import hashlib
 
 
 
-def verify_signature(headers: dict, payload: str, secret: str) -> bool:
+def verify_signature(headers: dict, payload: bytes, secret: str) -> bool:
     signature = headers.get("X-Hub-Signature-256")
 
     if not signature:

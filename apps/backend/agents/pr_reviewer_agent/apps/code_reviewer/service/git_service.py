@@ -21,7 +21,7 @@ class CodeReviewService:
             author=pr['user']['login'],
             state=pr['state'],
             title=pr['title'],
-            description=pr["head"]['repo']['description'],
+            description=pr.get('body'),
             source_branch=pr['head']['ref'],
             target_branch=pr['base']['ref'],
             url=pr['html_url'],
