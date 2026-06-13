@@ -11,7 +11,7 @@ class CodeReviewService:
             self,
             *,
             payload : dict,
-            action : Str
+            action : str
     ):
         pr_data = self._build_pr_data(payload)
         print("actionaction", action)
