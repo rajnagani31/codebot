@@ -34,6 +34,7 @@ class PullRequest(Base, DateTimeMixin):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(String, nullable=True)
     source_branch: Mapped[str] = mapped_column(String(255), nullable=False)
+    
     target_branch: Mapped[str] = mapped_column(String(255), nullable=False)
     url: Mapped[str] = mapped_column(String(2048), nullable=False)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True),nullable=True)
