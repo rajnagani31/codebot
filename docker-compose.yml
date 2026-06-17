@@ -1,3 +1,5 @@
+# Local development compose stack.
+# Use `docker-compose.staging.yml` together with this file on the server.
 services:
 
   # ── PostgreSQL (+ pgvector extension) ────────────────────────
@@ -61,7 +63,7 @@ services:
       QDRANT_PORT: "6333"
       QDRANT_URL: http://vector_db:6333
       AUTO_CREATE_SCHEMA: "true"
-      FRONTEND_BASE_URL: http://localhost:3000
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:3000}
     depends_on:
       db:
         condition: service_healthy
@@ -76,7 +78,7 @@ services:
   # ── Frontend (React + nginx) ───────────────────────────────────
   frontend:
     build:
-      context: ./frontend
+      context: ./apps/frontend
       dockerfile: Dockerfile
     container_name: codebot-frontend
     depends_on:

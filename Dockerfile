@@ -40,14 +40,13 @@ RUN pip install --no-cache-dir uv
 COPY pyproject.toml uv.lock ./
 
 # Install Python dependencies using UV.
-RUN uv sync --frozen --no-dev
+RUN uv sync --no-dev
 
 
 # Copy source code
-COPY bot          ./bot
-COPY backend/bot  ./backend/bot
-COPY alembic      ./alembic
-COPY alembic.ini  ./alembic.ini
+COPY apps/backend  ./apps/backend
+COPY alembic       ./alembic
+COPY alembic.ini   ./alembic.ini
 
 # Add virtual environment to PATH
 ENV PATH="/app/.venv/bin:$PATH" 
@@ -56,4 +55,4 @@ ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
 
 # The command that runs when the container starts.
-CMD ["uvicorn", "bot.application.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "apps.backend.bot.application.main:app", "--host", "0.0.0.0", "--port", "8000"]
