@@ -32,6 +32,7 @@ class PullRequest(Base, DateTimeMixin):
         nullable=True,
         default=PRStateEnum.OPEN,
     )
+    pr_action: Mapped[str] = mapped_column(String(255), nullable=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(String, nullable=True)
     source_branch: Mapped[str] = mapped_column(String(255), nullable=False)

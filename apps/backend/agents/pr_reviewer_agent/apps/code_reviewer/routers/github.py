@@ -1,4 +1,5 @@
 import json
+from textwrap import indent
 from fastapi import APIRouter, Depends, Request, HTTPException
 from apps.backend.bot.application.core.database import SessionLocal
 from ..webhook.verify_signature import verify_signature
@@ -39,6 +40,9 @@ async def github_webhook(
 
     # dict data print
     payload_dict = json.loads(payload)
+
+    print(json.dumps(payload_dict, indent=4))
+    
     # print(json.dumps(payload_dict, indent=4))
     with open("payload.json", "w") as f:
         json.dump(payload_dict, f, indent=4)

@@ -11,8 +11,12 @@ class CodeReviewService:
             self,
             *,
             payload : dict,
-            action : str
+            action : PullRequestAction | str
     ):
+        if action == PullRequestAction.UNKNOWN:
+            print(f"Ignoring unknown action: {action}")
+            return None
+
         pr_data = self._build_pr_data(payload)
         print("actionaction", action)
 
@@ -36,10 +40,7 @@ class CodeReviewService:
 
             case PullRequestAction.CLOSED:
                 print('case CLOSED',PullRequestAction.CLOSED.value)
-                return self.repository.save_pull_request(
-                    pr_data,
-                    payload["pull_request"]["merged"]
-                )
+                return self.repository.save_pull_request(pr_data)
 
             case PullRequestAction.UNKNOWN:
                 return None
@@ -56,25 +57,46 @@ class CodeReviewService:
         if pr is None:
             raise ValueError("Webhook payload does not contain 'pull_request' data")
 
-        # Extract required fields – ``full_name`` should be a string, not the full repo dict.
-        # ``owner`` is the login of the repository owner.
-        full_name = pr.get("head", {}).get("repo", {}).get("full_name")
-        owner = pr.get("base", {}).get("repo", {}).get("owner", {}).get("login")
-        default_branch = pr.get("base", {}).get("repo", {}).get("default_branch")
+        # Extract required fields safely to avoid KeyError and TypeError on nested structures.
+        base_repo = pr.get("base", {}).get("repo", {}) or {}
+        head_repo = pr.get("head", {}).get("repo", {}) or {}
+
+        repo_id = base_repo.get("id")
+        pr_number = pr.get("number")
+        commit_sha = pr.get("head", {}).get("sha")
+        author = pr.get("user", {}).get("login")
+        
+        # Determine the standardized PR state (e.g. CLOSED vs MERGED)
+        pr_action = payload.get("action")
+        raw_state = pr.get("state")
+        is_merged = pr.get("merged", False)
+        state = "merged" if raw_state == "closed" and is_merged else raw_state
+
+        title = pr.get("title")
+        description = head_repo.get("description")
+        source_branch = pr.get("head", {}).get("ref")
+        target_branch = pr.get("base", {}).get("ref")
+        url = pr.get("html_url")
+
+        # Extract optional fields safely
+        full_name = head_repo.get("full_name")
+        owner = base_repo.get("owner", {}).get("login")
+        default_branch = base_repo.get("default_branch")
 
         return PullRequestData(
-            repo_id=pr["base"]["repo"]["id"],
-            pr_number=pr["number"],
-            commit_sha=pr["head"]["sha"],
-            author=pr["user"]["login"],
+            repo_id=repo_id,
+            pr_number=pr_number,
+            pr_action=pr_action,
+            commit_sha=commit_sha,
+            author=author,
             full_name=full_name,
             owner=owner,
-            state=pr["state"],
-            title=pr["title"],
-            description=pr["head"]["repo"]["description"],
-            source_branch=pr["head"]["ref"],
-            target_branch=pr["base"]["ref"],
-            url=pr["html_url"],
+            state=state,
+            title=title,
+            description=description,
+            source_branch=source_branch,
+            target_branch=target_branch,
+            url=url,
             closed_at=pr.get("closed_at"),
             merged_at=pr.get("merged_at"),
             default_branch=default_branch,

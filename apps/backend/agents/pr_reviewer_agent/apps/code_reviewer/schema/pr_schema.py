@@ -17,3 +17,4 @@ class PullRequestData(BaseModel):
     full_name: str | None = None
     owner: str | None = None
     default_branch: str | None = None
+    pr_action: str
