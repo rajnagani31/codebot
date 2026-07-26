@@ -24,8 +24,33 @@ class ReviewJob(Base, DateTimeMixin):
         Index("ix_review_jobs_status_queued_at", "status", "queued_at"),
         Index("ix_review_jobs_pr_id_queued_at", "pr_id", "queued_at"),
     )
-    __metadata__ = MetaData(info={"schema_disc": "tracks review job lifecycle"})
+    __metadata__ = MetaData(info={"schema_disc": "Stores one AI review execution/lifecycle for a PR."})
+    """
+    1. PR webhook received
+    2. Create ReviewJob(status="queued")
+    3. Worker picks job
+    4. Update status="running", started_at=now()
+    5. Run AI review
+    6. If success: status="succeeded", finished_at=now()
+    7. If error: status="failed", error_code="MODEL_TIMEOUT"
 
+    # Example
+    {
+    "id": 1001,
+    "pr_id": 25,
+    "status": "queued",
+    "attempts": 0,
+    "queued_at": "2026-07-19T10:00:00Z"
+    }
+
+    # Why this table is useful
+        - This table lets you track:
+        - which PR review is pending,
+        - which review is currently running,
+        - retry attempts,
+        - failures,
+        - when the review started and finished.
+    """
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     pr_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("pull_requests.id", ondelete="CASCADE"), nullable=False)
     status: Mapped[ReviewJobStatusEnum] = mapped_column(

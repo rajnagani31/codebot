@@ -1,6 +1,9 @@
+from email.policy import default
 import json
 from textwrap import indent
-from fastapi import APIRouter, Depends, Request, HTTPException
+from typing import Annotated
+from fastapi import APIRouter, Body, Depends, Request, HTTPException, Body
+from httpx import stream
 from apps.backend.bot.application.core.database import SessionLocal
 from ..webhook.verify_signature import verify_signature
 from dotenv import load_dotenv
@@ -10,7 +13,7 @@ from apps.backend.bot.application.dependencies.auth import get_current_user # TO
 from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.service.pr_resolver import PrResolver
 load_dotenv()
 import os
-
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -26,7 +29,6 @@ async def github_webhook(
 
     count = 0
     payload = await request.body()
-
     print("SECRET:", os.getenv("GITHUB_WEBHOOK_SECRET"))
     print("HEADER:", request.headers.get("X-Hub-Signature-256"))
     print("Installation:",request.headers.get("installation"))
@@ -53,6 +55,7 @@ async def github_webhook(
     
     # call service to process the webhook event as dict paload
     code_review_service.process_webhook(payload=payload_dict, action=action)
+    
     # TODO: Process the webhook event
     # For now, just return a success response
     print('pr count', count)
@@ -68,7 +71,17 @@ async def github_webhook(
 
 
 
+from fastapi import FastAPI
 
+app = FastAPI()
+
+
+@router.get("/items/")
+async def read_items(q : str | None = None):
+    results = {"items": [{"item_id": "Foo"}, {"item_id": "Bar"}]}
+    if q:
+        results.update({"q": q})
+    return results
 
 
 

@@ -33,8 +33,21 @@ class ReviewFinding(Base):
         Index("ix_review_findings_severity_category", "severity", "category"),
         Index("ix_review_findings_report_id", "report_id"),
     )
-    __metadata__ = MetaData(info={"schema": "stores detailed issues under a report"})
+    __metadata__ = MetaData(info={"schema": "Stores each individual AI review issue/comment."})
 
+    """
+    {
+    "report_id": 501,
+    "file_path": "apps/backend/main.py",
+    "line_start": 44,
+    "line_end": 50,
+    "severity": "high",
+    "category": "security",
+    "title": "Missing authorization check",
+    "summary": "This endpoint allows access without checking user permissions.",
+    "recommendation": "Add permission validation before returning data."
+    }
+    """
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     report_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("review_reports.id", ondelete="CASCADE"), nullable=False)
     file_path: Mapped[str] = mapped_column(Text, nullable=False)

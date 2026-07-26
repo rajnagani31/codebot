@@ -8,7 +8,17 @@ import uuid
 
 class Repository(Base, DateTimeMixin):
     __tablename__ = "repositories"
-
+    """
+    {
+        "id": 1,
+        "repo_id": 987654321,
+        "user_id": 10,
+        "full_name": "raj/codebot",
+        "owner": "raj",
+        "default_branch": "main",
+        "is_active": true
+    }
+    """
     id: Mapped[BigInteger] = mapped_column(BigInteger, primary_key=True)
     repo_id: Mapped[BigInteger] = mapped_column(BigInteger, nullable=True)
     user_id: Mapped[int] = mapped_column(

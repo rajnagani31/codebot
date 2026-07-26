@@ -2,6 +2,7 @@ from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.model.pull_request
 from sqlalchemy import select
 from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.model.repository import Repository
 from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.schema.pr_schema import PullRequestData
+from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.model.review_job import ReviewJob
 
 
 class CodeReviewRepository:
@@ -50,6 +51,16 @@ class CodeReviewRepository:
                 )
 
                 session.add(pr)
+                session.flush()
+
+                review_job = ReviewJob(
+                    pr_id=pr.id,
+                    status=pr_data.review_job.status,
+                    attempts=pr_data.review_job.attempts,
+                    queued_at=pr_data.review_job.queued_at,
+                    )                           
+
+                session.add(review_job)
 
             session.commit()
             session.refresh(pr)

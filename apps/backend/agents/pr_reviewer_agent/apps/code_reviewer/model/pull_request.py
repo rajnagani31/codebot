@@ -20,7 +20,21 @@ class PullRequest(Base, DateTimeMixin):
         Index("ix_pull_requests_repo_pr", "repo_id", "pr_number"),
     )
     __metadata__ = MetaData(info={"schema_disc": "is root aggregate for pr context"})
-
+    """
+    {
+        "user_id": 10,
+        "repo_id": 1,
+        "pr_number": 25,
+        "commit_sha": "abc123",
+        "author": "raj",
+        "state": "open",
+        "title": "Add AI reviewer",
+        "description": "This PR adds review flow",
+        "source_branch": "feature/ai-reviewer",
+        "target_branch": "main",
+        "url": "https://github.com/raj/codebot/pull/25"
+    }
+    """
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("user_details.id", ondelete = "CASCADE"), nullable=True)
     repo_id: Mapped[int] = mapped_column(ForeignKey("repositories.id", ondelete = "CASCADE"), nullable=True)

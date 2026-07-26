@@ -1,6 +1,8 @@
 from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.repository.git_repository import CodeReviewRepository
-from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.schema.pr_schema import PullRequestData
+from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.schema.pr_schema import PullRequestData, ReviewJobData
 from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.service.pr_resolver import PullRequestAction
+from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.model.review_job import ReviewJobStatusEnum
+from datetime import UTC, datetime
 
 class CodeReviewService:
     def __init__(self, repository : CodeReviewRepository):
@@ -83,6 +85,14 @@ class CodeReviewService:
         owner = base_repo.get("owner", {}).get("login")
         default_branch = base_repo.get("default_branch")
 
+        # review job
+
+        review_job = ReviewJobData(
+            status=ReviewJobStatusEnum.QUEUED,
+            attempts=0,
+            queued_at=datetime.now(UTC),
+        )
+
         return PullRequestData(
             repo_id=repo_id,
             pr_number=pr_number,
@@ -100,4 +110,5 @@ class CodeReviewService:
             closed_at=pr.get("closed_at"),
             merged_at=pr.get("merged_at"),
             default_branch=default_branch,
+            review_job=review_job
         )
