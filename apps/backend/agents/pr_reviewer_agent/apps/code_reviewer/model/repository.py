@@ -20,10 +20,11 @@ class Repository(Base, DateTimeMixin):
     }
     """
     id: Mapped[BigInteger] = mapped_column(BigInteger, primary_key=True)
-    repo_id: Mapped[BigInteger] = mapped_column(BigInteger, nullable=True)
+    repo_id: Mapped[BigInteger] = mapped_column(BigInteger, nullable=True, index=True)
+    installation_id: Mapped[int] = mapped_column(BigInteger, nullable=True, index=True)
+    github_account_id: Mapped[int] = mapped_column(BigInteger, nullable=True)
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("user_details.id", ondelete="CASCADE"),
-        nullable=True
+        ForeignKey("user_details.id", ondelete="CASCADE"), nullable=True
     )
     full_name: Mapped[str] = mapped_column(nullable=False)
     owner: Mapped[str] = mapped_column(nullable=False)
