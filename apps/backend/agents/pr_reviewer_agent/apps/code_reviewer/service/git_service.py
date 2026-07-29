@@ -1,51 +1,51 @@
-from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.repository.git_repository import CodeReviewRepository
-from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.schema.pr_schema import PullRequestData, ReviewJobData
-from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.service.pr_resolver import PullRequestAction
-from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.model.review_job import ReviewJobStatusEnum
+from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.repository.git_repository import (
+    CodeReviewRepository,
+)
+from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.schema.pr_schema import (
+    PullRequestData,
+    ReviewJobData,
+)
+from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.service.pr_resolver import (
+    PullRequestAction,
+)
+from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.model.review_job import (
+    ReviewJobStatusEnum,
+)
 from datetime import UTC, datetime
 
+
 class CodeReviewService:
-    def __init__(self, repository : CodeReviewRepository):
+    def __init__(self, repository: CodeReviewRepository):
         self.repository = repository
 
-        
-    def process_webhook(
-            self,
-            *,
-            payload : dict,
-            action : PullRequestAction | str
-    ):
+    def process_webhook(self, *, payload: dict, action: PullRequestAction | str):
         if action == PullRequestAction.UNKNOWN:
-            print(f"Ignoring unknown action: {action}")
             return None
 
         pr_data = self._build_pr_data(payload)
-        print("actionaction", action)
 
         match action:
 
             case PullRequestAction.OPENED:
-                print('case  open', PullRequestAction.OPENED.value)
                 return self.repository.save_pull_request(pr_data)
 
             case PullRequestAction.READY_FOR_REVIEW:
-                print('case review',PullRequestAction.READY_FOR_REVIEW.value)
                 return self.repository.save_pull_request(pr_data)
 
             case PullRequestAction.SYNCHRONIZE:
-                print('case SYNCHRONIZE',PullRequestAction.SYNCHRONIZE.value)
                 return self.repository.save_pull_request(pr_data)
 
             case PullRequestAction.REOPENED:
-                print('case REOPENED',PullRequestAction.REOPENED.value)
                 return self.repository.save_pull_request(pr_data)
 
             case PullRequestAction.CLOSED:
-                print('case CLOSED',PullRequestAction.CLOSED.value)
                 return self.repository.save_pull_request(pr_data)
 
             case PullRequestAction.UNKNOWN:
                 return None
+
+    def process_installation_webhook(self, *, payload: dict):
+        return self.repository.save_installation_repositories(payload)
 
     def _build_pr_data(self, payload: dict) -> PullRequestData:
         """Build a PullRequestData object from the incoming GitHub webhook payload.
@@ -64,10 +64,14 @@ class CodeReviewService:
         head_repo = pr.get("head", {}).get("repo", {}) or {}
 
         repo_id = base_repo.get("id")
+        installation_id = (payload.get("installation") or {}).get("id")
+        github_account_id = (
+            (payload.get("installation") or {}).get("account") or {}
+        ).get("id")
         pr_number = pr.get("number")
         commit_sha = pr.get("head", {}).get("sha")
         author = pr.get("user", {}).get("login")
-        
+
         # Determine the standardized PR state (e.g. CLOSED vs MERGED)
         pr_action = payload.get("action")
         raw_state = pr.get("state")
@@ -75,13 +79,13 @@ class CodeReviewService:
         state = "merged" if raw_state == "closed" and is_merged else raw_state
 
         title = pr.get("title")
-        description = head_repo.get("description")
+        description = pr.get("body") or base_repo.get("description")
         source_branch = pr.get("head", {}).get("ref")
         target_branch = pr.get("base", {}).get("ref")
         url = pr.get("html_url")
 
         # Extract optional fields safely
-        full_name = head_repo.get("full_name")
+        full_name = base_repo.get("full_name")
         owner = base_repo.get("owner", {}).get("login")
         default_branch = base_repo.get("default_branch")
 
@@ -95,6 +99,8 @@ class CodeReviewService:
 
         return PullRequestData(
             repo_id=repo_id,
+            installation_id=installation_id,
+            github_account_id=github_account_id,
             pr_number=pr_number,
             pr_action=pr_action,
             commit_sha=commit_sha,
@@ -110,5 +116,5 @@ class CodeReviewService:
             closed_at=pr.get("closed_at"),
             merged_at=pr.get("merged_at"),
             default_branch=default_branch,
-            review_job=review_job
+            review_job=review_job,
         )

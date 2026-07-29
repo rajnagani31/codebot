@@ -1,6 +1,9 @@
 from pydantic import BaseModel
 from datetime import datetime
-from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.model.review_job import ReviewJobStatusEnum
+from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.model.review_job import (
+    ReviewJobStatusEnum,
+)
+
 
 class ReviewJobData(BaseModel):
     """
@@ -12,15 +15,19 @@ class ReviewJobData(BaseModel):
     "queued_at": "2026-07-19T10:00:00Z"
     }
     """
+
     status: ReviewJobStatusEnum
-    attempts : int
+    attempts: int
     queued_at: datetime
     started_at: datetime | None = None
     finished_at: datetime | None = None
     error_code: str | None = None
 
+
 class PullRequestData(BaseModel):
     repo_id: int
+    installation_id: int | None = None
+    github_account_id: int | None = None
     pr_number: int
     commit_sha: str
     author: str
@@ -37,3 +44,17 @@ class PullRequestData(BaseModel):
     default_branch: str | None = None
     pr_action: str
     review_job: ReviewJobData | None = None
+
+
+class PullRequestFile(BaseModel):
+    sha: str | None = None
+    filename: str
+    status: str
+    additions: int = 0
+    deletions: int = 0
+    changes: int = 0
+    blob_url: str | None = None
+    raw_url: str | None = None
+    contents_url: str | None = None
+    patch: str | None = None
+    previous_filename: str | None = None
