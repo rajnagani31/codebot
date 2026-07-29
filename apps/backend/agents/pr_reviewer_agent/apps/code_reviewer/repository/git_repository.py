@@ -1,13 +1,15 @@
 from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.model.pull_request import PullRequest
 from sqlalchemy import select
 from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.model.repository import Repository
+from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.schema.pr_schema import PullRequestData
+from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.model.review_job import ReviewJob
 
 
 class CodeReviewRepository:
     def __init__(self, session_factory):
         self.session_factory = session_factory
 
-    def save_pull_request(self, pr_data):
+    def save_pull_request(self, pr_data: PullRequestData):
         session = self.session_factory()
 
         try:
@@ -17,7 +19,7 @@ class CodeReviewRepository:
             print('owner', pr_data.owner)
             print("full_name", pr_data.full_name)
 
-            repo_id = repo.repo_id
+            repo_id = repo.id
             pr_number = pr_data.pr_number
             pr = self.get_pull_request(session, repo_id, pr_number)
 
@@ -25,8 +27,10 @@ class CodeReviewRepository:
                 pr.commit_sha = pr_data.commit_sha
                 pr.state = pr_data.state
                 pr.title = pr_data.title
+                pr.pr_action = pr_data.pr_action
                 pr.description = pr_data.description
-                # pr.updated_at = 
+                pr.closed_at = pr_data.closed_at
+                pr.merged_at = pr_data.merged_at
 
             else:
                 
@@ -36,14 +40,27 @@ class CodeReviewRepository:
                     commit_sha=pr_data.commit_sha,
                     author=pr_data.author,
                     state=pr_data.state,
+                    pr_action = pr_data.pr_action,
                     title=pr_data.title,
                     description=pr_data.description,
                     source_branch=pr_data.source_branch,
                     target_branch=pr_data.target_branch,
                     url=pr_data.url,
+                    closed_at=pr_data.closed_at,
+                    merged_at=pr_data.merged_at,
                 )
 
                 session.add(pr)
+                session.flush()
+
+                review_job = ReviewJob(
+                    pr_id=pr.id,
+                    status=pr_data.review_job.status,
+                    attempts=pr_data.review_job.attempts,
+                    queued_at=pr_data.review_job.queued_at,
+                    )                           
+
+                session.add(review_job)
 
             session.commit()
             session.refresh(pr)

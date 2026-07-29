@@ -28,5 +28,6 @@ class OpenAILLMService:
             model=self.model_name,
             streaming=True,
         )
+        print('openai llm used')
         self._chat_model = model.bind_tools(tools) if tools else model
         return self

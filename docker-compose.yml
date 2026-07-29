@@ -41,7 +41,7 @@ services:
     image: qdrant/qdrant:v1.13.2  # This is a image with the latest stable Qdrant version as of June 2024
     container_name: codebot-qdrant # This is a container name for the Qdrant service, used for easy reference in other services
     ports: 
-      - "6333:6333"
+      - "6334:6333"
     volumes:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
