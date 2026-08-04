@@ -18,10 +18,14 @@ class ReviewJobData(BaseModel):
 
     status: ReviewJobStatusEnum
     attempts: int
+    total_files: int = 0
+    processed_files: int = 0
     queued_at: datetime
     started_at: datetime | None = None
     finished_at: datetime | None = None
     error_code: str | None = None
+    base_sha: str | None = None
+    head_sha: str | None = None
 
 
 class PullRequestData(BaseModel):

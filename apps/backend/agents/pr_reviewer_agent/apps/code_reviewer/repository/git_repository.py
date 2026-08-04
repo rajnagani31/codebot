@@ -2,6 +2,8 @@ from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.model.pull_request
     PullRequest,
 )
 from sqlalchemy import select
+from sqlalchemy import case, func, update
+from sqlalchemy.dialects.postgresql import insert
 from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.model.repository import (
     Repository,
 )
@@ -10,6 +12,10 @@ from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.schema.pr_schema i
 )
 from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.model.review_job import (
     ReviewJob,
+    ReviewJobStatusEnum,
+)
+from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.model.review_file_result import (
+    ReviewFileResult,
 )
 
 
@@ -57,13 +63,17 @@ class CodeReviewRepository:
                 session.add(pr)
                 session.flush()
 
+            if pr_data.review_job is not None:
                 review_job = ReviewJob(
                     pr_id=pr.id,
                     status=pr_data.review_job.status,
                     attempts=pr_data.review_job.attempts,
+                    total_files=pr_data.review_job.total_files,
+                    processed_files=pr_data.review_job.processed_files,
                     queued_at=pr_data.review_job.queued_at,
+                    base_sha=pr_data.review_job.base_sha,
+                    head_sha=pr_data.review_job.head_sha,
                 )
-
                 session.add(review_job)
 
             session.commit()
@@ -289,5 +299,179 @@ class CodeReviewRepository:
                 "installation_id": repository.installation_id,
             }
 
+        finally:
+            session.close()
+
+    def get_review_job_context(self, review_job_id: int):
+        session = self.session_factory()
+        try:
+            review_job = session.execute(
+                select(ReviewJob).where(ReviewJob.id == review_job_id)
+            ).scalar_one_or_none()
+            if review_job is None:
+                return None
+
+            context = self.get_pull_request_review_context(review_job.pr_id)
+            if context is None:
+                return None
+
+            context["review_job_id"] = review_job.id
+            context["review_job_status"] = review_job.status
+            context["base_sha"] = review_job.base_sha
+            context["head_sha"] = review_job.head_sha
+            return context
+        finally:
+            session.close()
+
+    def get_latest_queued_review_job_id(self, pr_id: int) -> int | None:
+        session = self.session_factory()
+        try:
+            return session.execute(
+                select(ReviewJob.id)
+                .where(
+                    ReviewJob.pr_id == pr_id,
+                    ReviewJob.status == ReviewJobStatusEnum.QUEUED,
+                )
+                .order_by(ReviewJob.queued_at.desc(), ReviewJob.id.desc())
+                .limit(1)
+            ).scalar_one_or_none()
+        finally:
+            session.close()
+
+    def mark_review_job_running(self, review_job_id: int) -> None:
+        session = self.session_factory()
+        try:
+            session.execute(
+                update(ReviewJob)
+                .where(ReviewJob.id == review_job_id)
+                .values(
+                    status=ReviewJobStatusEnum.RUNNING,
+                    started_at=func.now(),
+                    finished_at=None,
+                    attempts=ReviewJob.attempts + 1,
+                    error_code=None,
+                    processed_files=0,
+                    final_review_json=None,
+                )
+            )
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def set_review_job_total_files(self, review_job_id: int, total_files: int) -> None:
+        session = self.session_factory()
+        try:
+            session.execute(
+                update(ReviewJob)
+                .where(ReviewJob.id == review_job_id)
+                .values(total_files=total_files, processed_files=0)
+            )
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def increment_processed_files(self, review_job_id: int) -> None:
+        session = self.session_factory()
+        try:
+            session.execute(
+                update(ReviewJob)
+                .where(ReviewJob.id == review_job_id)
+                .values(
+                    processed_files=case(
+                        (
+                            ReviewJob.processed_files < ReviewJob.total_files,
+                            ReviewJob.processed_files + 1,
+                        ),
+                        else_=ReviewJob.processed_files,
+                    )
+                )
+            )
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def mark_review_job_succeeded(self, review_job_id: int, final_review: dict) -> None:
+        session = self.session_factory()
+        try:
+            session.execute(
+                update(ReviewJob)
+                .where(ReviewJob.id == review_job_id)
+                .values(
+                    status=ReviewJobStatusEnum.SUCCEEDED,
+                    processed_files=ReviewJob.total_files,
+                    finished_at=func.now(),
+                    error_code=None,
+                    final_review_json=final_review,
+                )
+            )
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def mark_review_job_failed(self, review_job_id: int, error_code: str) -> None:
+        session = self.session_factory()
+        try:
+            session.execute(
+                update(ReviewJob)
+                .where(ReviewJob.id == review_job_id)
+                .values(
+                    status=ReviewJobStatusEnum.FAILED,
+                    finished_at=func.now(),
+                    error_code=error_code[:64],
+                )
+            )
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def save_file_review_result(
+        self,
+        *,
+        review_job_id: int,
+        filename: str,
+        status: str,
+        findings: list,
+        summary: str,
+        metadata: dict | None = None,
+    ) -> None:
+        session = self.session_factory()
+        try:
+            stmt = insert(ReviewFileResult).values(
+                job_id=review_job_id,
+                filename=filename,
+                status=status,
+                findings_json=findings,
+                summary=summary,
+                metadata_json=metadata or {},
+            )
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_review_file_results_job_file",
+                set_={
+                    "status": stmt.excluded.status,
+                    "findings_json": stmt.excluded.findings_json,
+                    "summary": stmt.excluded.summary,
+                    "metadata_json": stmt.excluded.metadata_json,
+                },
+            )
+            session.execute(stmt)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
         finally:
             session.close()

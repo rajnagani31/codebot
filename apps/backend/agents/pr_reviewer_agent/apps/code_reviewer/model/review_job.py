@@ -1,7 +1,8 @@
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import BigInteger, DateTime, Enum as SQLEnum, ForeignKey, Index, SmallInteger, String, MetaData
+from sqlalchemy import BigInteger, DateTime, Enum as SQLEnum, ForeignKey, Index, Integer, SmallInteger, String, MetaData
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .mixin import DateTimeMixin
@@ -59,7 +60,12 @@ class ReviewJob(Base, DateTimeMixin):
         default=ReviewJobStatusEnum.QUEUED,
     )
     attempts: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
+    total_files: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    processed_files: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     queued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    final_review_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    base_sha: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    head_sha: Mapped[str | None] = mapped_column(String(64), nullable=True)

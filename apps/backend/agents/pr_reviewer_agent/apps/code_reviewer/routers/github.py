@@ -13,6 +13,7 @@ from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.service.git_servic
 from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.service.pr_resolver import (
     PrResolver,
 )
+from apps.backend.tasks.review_tasks import review_pull_request
 
 load_dotenv()
 
@@ -41,7 +42,7 @@ async def github_webhook(
         raise HTTPException(status_code=401, detail="Invalid signature")
 
     payload_dict = json.loads(payload)
-    print(json.dumps(payload_dict, indent=4))
+    # print(json.dumps(payload_dict, indent=4))
     
     # print(json.dumps(payload_dict, indent=4))
     with open("payload.json", "w") as f:
@@ -58,9 +59,19 @@ async def github_webhook(
 
     resolver = PrResolver()
     action = resolver.resolver(payload=payload_dict)
-    code_review_service.process_webhook(payload=payload_dict, action=action)
+    pull_request = code_review_service.process_webhook(payload=payload_dict, action=action)
+    review_job_id = None
 
-    return {"status": "webhook received"}
+    print('[Pull Request]', pull_request)
+    if pull_request is not None:
+        review_job_id = code_review_service.repository.get_latest_queued_review_job_id(
+            pull_request.id
+        )
+        if review_job_id is not None:
+            print(f"[Review Job ID] {review_job_id} - Queued for review")
+            review_pull_request.delay(review_job_id)
+
+    return {"status": "webhook received", "review_job_id": review_job_id}
 
 
 # action is pending
