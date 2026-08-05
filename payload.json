@@ -1,6 +1,46 @@
 {
-    "action": "edited",
-    "number": 42,
+    "action": "submitted",
+    "review": {
+        "id": 4856863618,
+        "node_id": "PRR_kwDOSDERBs8AAAABIX3bgg",
+        "user": {
+            "login": "greptile-apps[bot]",
+            "id": 165735046,
+            "node_id": "BOT_kgDOCeDqhg",
+            "avatar_url": "https://avatars.githubusercontent.com/in/867647?v=4",
+            "gravatar_id": "",gitgit
+            "url": "https://api.github.com/users/greptile-apps%5Bbot%5D",
+            "html_url": "https://github.com/apps/greptile-apps",
+            "followers_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/followers",
+            "following_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/following{/other_user}",
+            "gists_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/gists{/gist_id}",
+            "starred_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/starred{/owner}{/repo}",
+            "subscriptions_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/subscriptions",
+            "organizations_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/orgs",
+            "repos_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/repos",
+            "events_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/events{/privacy}",
+            "received_events_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/received_events",
+            "type": "Bot",
+            "user_view_type": "public",
+            "site_admin": false
+        },
+        "body": "Your trial has ended. [Reactivate Greptile](https://app.greptile.com/-/pull-requests) to resume code reviews.",
+        "commit_id": "a52bf1301a07c6de183117db2462d42a01258837",
+        "state": "commented",
+        "html_url": "https://github.com/rajnagani31/codebot/pull/42#pullrequestreview-4856863618",
+        "pull_request_url": "https://api.github.com/repos/rajnagani31/codebot/pulls/42",
+        "_links": {
+            "html": {
+                "href": "https://github.com/rajnagani31/codebot/pull/42#pullrequestreview-4856863618"
+            },
+            "pull_request": {
+                "href": "https://api.github.com/repos/rajnagani31/codebot/pulls/42"
+            }
+        },
+        "submitted_at": "2026-08-04T16:43:59Z",
+        "updated_at": "2026-08-04T16:43:59Z",
+        "author_association": "NONE"
+    },
     "pull_request": {
         "url": "https://api.github.com/repos/rajnagani31/codebot/pulls/42",
         "id": 4205313628,
@@ -36,10 +76,10 @@
         },
         "body": "\n\n<!-- This is an auto-generated comment: release notes by coderabbit.ai -->\n\n## Summary by CodeRabbit\n\n* **New Features**\n  * Added asynchronous pull request reviews with per-file progress, findings, summaries, and severity totals.\n  * Reviews now compare commit ranges, skip unsupported files gracefully, and preserve detailed results.\n  * Added Redis-backed background processing and improved GitHub authentication through private-key paths.\n  * Added structured handling for temporary failures and review-job status updates.\n\n* **Documentation**\n  * Added comprehensive documentation covering review pipeline architecture, worker operation, risks, and deployment guidance.\n\n* **Bug Fixes**\n  * Improved authentication validation and reuse of installation access tokens.\n\n<!-- end of auto-generated comment: release notes by coderabbit.ai -->",
         "created_at": "2026-08-04T16:35:13Z",
-        "updated_at": "2026-08-04T16:36:15Z",
+        "updated_at": "2026-08-04T16:43:53Z",
         "closed_at": null,
         "merged_at": null,
-        "merge_commit_sha": "448b83460429978095f073f110e2bcb0915a6563",
+        "merge_commit_sha": "95e68f741bca7f02595fe39a1b3d3323434d319f",
         "assignees": [],
         "requested_reviewers": [],
         "requested_teams": [],
@@ -50,11 +90,11 @@
         "review_comments_url": "https://api.github.com/repos/rajnagani31/codebot/pulls/42/comments",
         "review_comment_url": "https://api.github.com/repos/rajnagani31/codebot/pulls/comments{/number}",
         "comments_url": "https://api.github.com/repos/rajnagani31/codebot/issues/42/comments",
-        "statuses_url": "https://api.github.com/repos/rajnagani31/codebot/statuses/1e623191ead67c2a71b4cfcdf65229c881db4ab2",
+        "statuses_url": "https://api.github.com/repos/rajnagani31/codebot/statuses/a52bf1301a07c6de183117db2462d42a01258837",
         "head": {
             "label": "rajnagani31:nero-33",
             "ref": "nero-33",
-            "sha": "1e623191ead67c2a71b4cfcdf65229c881db4ab2",
+            "sha": "a52bf1301a07c6de183117db2462d42a01258837",
             "user": {
                 "login": "rajnagani31",
                 "id": 203210103,
@@ -145,7 +185,7 @@
                 "deployments_url": "https://api.github.com/repos/rajnagani31/codebot/deployments",
                 "created_at": "2026-04-15T06:20:16Z",
                 "updated_at": "2026-07-29T16:53:02Z",
-                "pushed_at": "2026-08-04T16:34:06Z",
+                "pushed_at": "2026-08-04T16:43:51Z",
                 "git_url": "git://github.com/rajnagani31/codebot.git",
                 "ssh_url": "git@github.com:rajnagani31/codebot.git",
                 "clone_url": "https://github.com/rajnagani31/codebot.git",
@@ -285,7 +325,7 @@
                 "deployments_url": "https://api.github.com/repos/rajnagani31/codebot/deployments",
                 "created_at": "2026-04-15T06:20:16Z",
                 "updated_at": "2026-07-29T16:53:02Z",
-                "pushed_at": "2026-08-04T16:34:06Z",
+                "pushed_at": "2026-08-04T16:43:51Z",
                 "git_url": "git://github.com/rajnagani31/codebot.git",
                 "ssh_url": "git@github.com:rajnagani31/codebot.git",
                 "clone_url": "https://github.com/rajnagani31/codebot.git",
@@ -354,30 +394,13 @@
                 "href": "https://api.github.com/repos/rajnagani31/codebot/pulls/42/commits"
             },
             "statuses": {
-                "href": "https://api.github.com/repos/rajnagani31/codebot/statuses/1e623191ead67c2a71b4cfcdf65229c881db4ab2"
+                "href": "https://api.github.com/repos/rajnagani31/codebot/statuses/a52bf1301a07c6de183117db2462d42a01258837"
             }
         },
         "author_association": "OWNER",
         "auto_merge": null,
         "assignee": null,
-        "active_lock_reason": null,
-        "merged": false,
-        "mergeable": true,
-        "rebaseable": true,
-        "mergeable_state": "unstable",
-        "merged_by": null,
-        "comments": 1,
-        "review_comments": 0,
-        "maintainer_can_modify": false,
-        "commits": 2,
-        "additions": 5057,
-        "deletions": 3168,
-        "changed_files": 25
-    },
-    "changes": {
-        "body": {
-            "from": ""
-        }
+        "active_lock_reason": null
     },
     "repository": {
         "id": 1211175174,
@@ -448,7 +471,7 @@
         "deployments_url": "https://api.github.com/repos/rajnagani31/codebot/deployments",
         "created_at": "2026-04-15T06:20:16Z",
         "updated_at": "2026-07-29T16:53:02Z",
-        "pushed_at": "2026-08-04T16:34:06Z",
+        "pushed_at": "2026-08-04T16:43:51Z",
         "git_url": "git://github.com/rajnagani31/codebot.git",
         "ssh_url": "git@github.com:rajnagani31/codebot.git",
         "clone_url": "https://github.com/rajnagani31/codebot.git",
@@ -483,22 +506,22 @@
         "default_branch": "develop"
     },
     "sender": {
-        "login": "coderabbitai[bot]",
-        "id": 136622811,
-        "node_id": "BOT_kgDOCCSy2w",
-        "avatar_url": "https://avatars.githubusercontent.com/in/347564?v=4",
+        "login": "greptile-apps[bot]",
+        "id": 165735046,
+        "node_id": "BOT_kgDOCeDqhg",
+        "avatar_url": "https://avatars.githubusercontent.com/in/867647?v=4",
         "gravatar_id": "",
-        "url": "https://api.github.com/users/coderabbitai%5Bbot%5D",
-        "html_url": "https://github.com/apps/coderabbitai",
-        "followers_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/followers",
-        "following_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/following{/other_user}",
-        "gists_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/gists{/gist_id}",
-        "starred_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/starred{/owner}{/repo}",
-        "subscriptions_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/subscriptions",
-        "organizations_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/orgs",
-        "repos_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/repos",
-        "events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/events{/privacy}",
-        "received_events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/received_events",
+        "url": "https://api.github.com/users/greptile-apps%5Bbot%5D",
+        "html_url": "https://github.com/apps/greptile-apps",
+        "followers_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/followers",
+        "following_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/following{/other_user}",
+        "gists_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/subscriptions",
+        "organizations_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/orgs",
+        "repos_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/repos",
+        "events_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/received_events",
         "type": "Bot",
         "user_view_type": "public",
         "site_admin": false

@@ -13,7 +13,9 @@ from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.service.git_servic
 from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.service.pr_resolver import (
     PrResolver,
 )
-from apps.backend.tasks.review_tasks import review_pull_request
+from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.tasks import (
+    review_pull_request,
+)
 
 load_dotenv()
 
@@ -74,7 +76,7 @@ async def github_webhook(
     return {"status": "webhook received", "review_job_id": review_job_id}
 
 
-# action is pending
+# action is pendingdocker compose up -d db redis
 
 
 from fastapi import FastAPI
