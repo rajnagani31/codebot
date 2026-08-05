@@ -1,5 +1,3 @@
-from tkinter import NO
-
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage
 import os

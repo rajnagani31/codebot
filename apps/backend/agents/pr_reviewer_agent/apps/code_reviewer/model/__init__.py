@@ -9,6 +9,7 @@ from apps.backend.bot.application.core.database import Base
 from .artifact_ref import ArtifactRef, ArtifactTypeEnum
 from .pull_request import PullRequest, PRStateEnum
 from .review_finding import ReviewFinding, FindingSeverityEnum
+from .review_file_result import ReviewFileResult
 from .review_job import ReviewJob, ReviewJobStatusEnum
 from .review_report import ReviewReport
 from .repository import Repository

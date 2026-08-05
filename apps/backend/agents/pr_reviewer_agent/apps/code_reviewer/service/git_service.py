@@ -70,6 +70,8 @@ class CodeReviewService:
         ).get("id")
         pr_number = pr.get("number")
         commit_sha = pr.get("head", {}).get("sha")
+        base_sha = pr.get("base", {}).get("sha")
+        before_sha = payload.get("before")
         author = pr.get("user", {}).get("login")
 
         # Determine the standardized PR state (e.g. CLOSED vs MERGED)
@@ -89,12 +91,18 @@ class CodeReviewService:
         owner = base_repo.get("owner", {}).get("login")
         default_branch = base_repo.get("default_branch")
 
-        # review job
-
-        review_job = ReviewJobData(
-            status=ReviewJobStatusEnum.QUEUED,
-            attempts=0,
-            queued_at=datetime.now(UTC),
+        reviewable_actions = {"opened", "ready_for_review", "synchronize", "reopened"}
+        review_base_sha = before_sha if pr_action == "synchronize" else base_sha
+        review_job = (
+            ReviewJobData(
+                status=ReviewJobStatusEnum.QUEUED,
+                attempts=0,
+                queued_at=datetime.now(UTC),
+                base_sha=review_base_sha,
+                head_sha=commit_sha,
+            )
+            if pr_action in reviewable_actions
+            else None
         )
 
         return PullRequestData(
