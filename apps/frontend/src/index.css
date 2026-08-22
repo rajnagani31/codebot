@@ -173,17 +173,15 @@ body,
 
 body {
   margin: 0;
-  background: var(--app-bg);
-  color: var(--text-primary);
+  background-color: #FFFDF2;
+  color: #111512;
   transition:
     background 180ms ease,
     color 180ms ease;
 }
 
-#root,
-.app-shell {
-  background: var(--app-bg);
-  color: var(--text-primary);
+#root {
+  min-height: 100%;
 }
 
 ::-webkit-scrollbar {
