@@ -17,6 +17,8 @@ from apps.backend.agents.pr_reviewer_agent.apps.code_reviewer.tasks import (
     review_pull_request,
 )
 
+from apps.backend.shared.auth import UserPrincipal, get_current_user_from_token
+
 load_dotenv()
 
 router = APIRouter()
@@ -29,7 +31,7 @@ def get_code_review_service():
 @router.post("/webhook/github")
 async def github_webhook(
     request: Request,
-    current_user=1,  # TODO : for auth
+    current_user = Depends(get_current_user_from_token),
     code_review_service: CodeReviewService = Depends(get_code_review_service),
 ):
 
@@ -84,9 +86,24 @@ from fastapi import FastAPI
 app = FastAPI()
 
 
+@router.get("/me")
+async def get_authenticated_agent_user(current_user: UserPrincipal = Depends(get_current_user_from_token)):
+    return {
+        "status": "authenticated",
+        "user": current_user,
+        "message": "Authenticated user successfully accessed NeroAI Code Review service."
+    }
+
+
 @router.get("/items/")
-async def read_items(q: str | None = None):
-    results = {"items": [{"item_id": "Foo"}, {"item_id": "Bar"}]}
+async def read_items(
+    q: str | None = None,
+    current_user: UserPrincipal = Depends(get_current_user_from_token),
+):
+    results = {
+        "authenticated_user_id": current_user.id,
+        "items": [{"item_id": "Foo"}, {"item_id": "Bar"}],
+    }
     if q:
         results.update({"q": q})
     return results

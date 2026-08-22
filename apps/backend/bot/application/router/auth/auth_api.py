@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 
-from ...dependencies.auth import get_auth_service, get_current_user
+from ...dependencies.auth import get_auth_service, get_current_user_from_db
 from ...schema.chat_schema import (
     AuthenticatedUserResponse,
     GoogleLoginUrlResponse,
@@ -147,5 +147,5 @@ def google_callback(
 
 
 @router.get("/me", response_model=AuthenticatedUserResponse)
-def get_authenticated_user(current_user=Depends(get_current_user)):
+def get_authenticated_user(current_user=Depends(get_current_user_from_db)):
     return AuthenticatedUserResponse(**current_user.__dict__)

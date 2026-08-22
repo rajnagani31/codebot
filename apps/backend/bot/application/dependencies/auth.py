@@ -11,7 +11,7 @@ def get_auth_service() -> AuthService:
     )
 
 
-def get_current_user(
+def get_current_user_from_db(
     request: Request,
     auth_service: AuthService = Depends(get_auth_service),
 ):
