@@ -51,6 +51,7 @@ class OpenAIToolGraph:
         self.llm = GroqLLMService(model_name=resolved_choice.model_name).bind_tools(
             self.tools
         )
+        print(f"OpenAIToolGraph initialized with model: {resolved_choice.model_name}, tools: {[tool.name for tool in self.tools]}")
 
     async def run_stream(
         self,

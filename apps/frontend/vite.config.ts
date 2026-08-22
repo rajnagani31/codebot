@@ -3,9 +3,14 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 
 export default defineConfig(({ mode }) => {
-  // Load .env from project root (one level up from frontend/)
-  const env = loadEnv(mode, path.resolve(__dirname, ".."), "");
-  const backendPort = env.BACKEND_PORT || "8001";
+  // Load .env from project root (codebot/) and apps/ directory
+  const rootEnv = loadEnv(mode, path.resolve(__dirname, "../.."), "");
+  const appsEnv = loadEnv(mode, path.resolve(__dirname, ".."), "");
+  const env = { ...appsEnv, ...rootEnv };
+
+  const backendPort = env.BACKEND_PORT || process.env.BACKEND_PORT || "8000";
+  const backendTarget =
+    env.VITE_BACKEND_URL || env.BACKEND_URL || `http://127.0.0.1:${backendPort}`;
 
   return {
     plugins: [react()],
@@ -19,7 +24,7 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       proxy: {
         "/api": {
-          target: `http://127.0.0.1:${backendPort}`,
+          target: backendTarget,
           changeOrigin: true,
         },
       },
