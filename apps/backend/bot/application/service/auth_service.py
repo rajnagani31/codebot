@@ -488,6 +488,7 @@ class AuthService:
             remaining_guest_messages = max(
                 session.message_limit - session.message_count, 0
             )
+            print(f"remaining_guest_messages: {remaining_guest_messages}, message_limit: {session.message_limit}, message_count: {session.message_count}")
 
         return AuthenticatedPrincipal(
             id=user.id,

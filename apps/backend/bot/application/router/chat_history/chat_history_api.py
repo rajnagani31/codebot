@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from ...config import SessionLocal
-from ...dependencies.auth import get_current_user
+from ...dependencies.auth import get_current_user_from_db
 from ...repository.chat_repository import ChatRepository
 from ...schema.chat_schema import (
     CreateThreadRequest,
@@ -20,7 +20,7 @@ def get_chat_service() -> ChatService:
 @router.post("/threads", response_model=ThreadSummaryResponse)
 def create_thread(
     request: CreateThreadRequest,
-    current_user = Depends(get_current_user),
+    current_user = Depends(get_current_user_from_db),
     chat_service: ChatService = Depends(get_chat_service),
 ):
     """This api create a new thread when use click new chat then add title and content history"""
@@ -43,7 +43,7 @@ def create_thread(
 
 @router.get("/threads", response_model=list[ThreadSummaryResponse])
 def list_threads(
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_current_user_from_db),
     chat_service: ChatService = Depends(get_chat_service),
 ):
     """ Look Thread content in sidebare"""
@@ -53,7 +53,7 @@ def list_threads(
 @router.get("/threads/{thread_id}/messages", response_model=list[MessageResponse])
 def list_messages(
     thread_id: int,
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_current_user_from_db),
     chat_service: ChatService = Depends(get_chat_service),
 ):
     """ 
