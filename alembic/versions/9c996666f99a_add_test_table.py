@@ -1,8 +1,8 @@
-"""add: datetime flag for PR close_at and merged_at
+""" add test table
 
-Revision ID: 7aee32f3dce3
-Revises: 3863dc99faa5
-Create Date: 2026-06-01 23:36:19.344299
+Revision ID: 9c996666f99a
+Revises: bab6f82cd4ca
+Create Date: 2026-06-15 20:18:42.864389
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '7aee32f3dce3'
-down_revision: Union[str, Sequence[str], None] = '3863dc99faa5'
+revision: str = '9c996666f99a'
+down_revision: Union[str, Sequence[str], None] = 'bab6f82cd4ca'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

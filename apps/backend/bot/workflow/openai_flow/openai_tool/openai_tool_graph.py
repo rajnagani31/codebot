@@ -11,6 +11,7 @@ from apps.backend.bot.application.schema.chat_schema import (
 )
 from apps.backend.bot.application.service.web_search_service import WebSearchService
 from apps.backend.bot.workflow.openai_flow.openai_adapter.openai_llm_service import OpenAILLMService
+from apps.backend.bot.workflow.openai_flow.openai_adapter.groq_llm_service import GroqLLMService
 from apps.backend.bot.workflow.openai_flow.openai_tool.openai_tools import (
     ToolCapabilities,
     ToolExecutionContext,
@@ -47,7 +48,7 @@ class OpenAIToolGraph:
             ),
         )
         self.tool_map = {tool.name: tool for tool in self.tools}
-        self.llm = OpenAILLMService(model_name=resolved_choice.model_name).bind_tools(
+        self.llm = GroqLLMService(model_name=resolved_choice.model_name).bind_tools(
             self.tools
         )
 

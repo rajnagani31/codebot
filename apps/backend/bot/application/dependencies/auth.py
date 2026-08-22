@@ -4,7 +4,6 @@ from ..config import JWT_SECRET, SessionLocal
 from ..repository.auth_repository import AuthRepository
 from ..service.auth_service import AuthError, AuthService
 
-
 def get_auth_service() -> AuthService:
     return AuthService(
         AuthRepository(SessionLocal),
@@ -12,7 +11,7 @@ def get_auth_service() -> AuthService:
     )
 
 
-def require_current_user(
+def get_current_user_from_db(
     request: Request,
     auth_service: AuthService = Depends(get_auth_service),
 ):

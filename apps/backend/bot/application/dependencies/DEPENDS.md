@@ -6,7 +6,7 @@ import json
 @router.post("/chat/stream")
 async def chat(
     request: ChatStreamRequest,
-    current_user=Depends(require_current_user),
+    current_user=Depends(get_current_user),
     chat_service: ChatService = Depends(get_chat_service),
     auth_service: AuthService = Depends(get_auth_service),
 ):

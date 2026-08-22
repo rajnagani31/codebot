@@ -80,16 +80,23 @@ class ChatService:
             metadata_json=assistant_metadata,
         )
 
-        # --- Vector retrieval disabled for this version ---
-        # Semantic search context (PGVector / Qdrant) is intentionally
-        # turned off until the retrieval pipeline is optimized.
-        # Do NOT remove the imports or finalize_stream storage logic;
-        # they will be re-enabled in a future version.
-
-
+        # --- Vector retrieval (Qdrant) ---
+        # Search Qdrant for semantically similar past conversations
+        # to give the LLM long-term memory context.
+        # PGVector search is still disabled (to be re-enabled later).
         # pg_vector_service = PGVectorService()
-        # Qdrant_vector_service = QdrantVectorService()
         previous_context = ""
+        # try:
+        #     qdrant_vector_service = QdrantVectorService()
+        #     relevant_chunks = qdrant_vector_service.search(
+        #         user_id=user_id, query=query, k=5
+        #     )
+        #     if relevant_chunks:
+        #         previous_context = "\n".join(relevant_chunks)
+        # except Exception as e:
+        #     # If Qdrant is unavailable, log and continue without context
+        #     print(f"⚠️ Qdrant vector search failed (non-fatal): {e}")
+        #     previous_context = ""
 
         llm_messages = self._build_llm_messages(previous_messages, query)
 

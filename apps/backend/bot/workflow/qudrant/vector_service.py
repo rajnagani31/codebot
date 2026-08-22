@@ -6,14 +6,15 @@ import os
 from datetime import datetime
 from dotenv import load_dotenv
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+import uuid
 load_dotenv()
 
 
 class QdrantVectorService:
 
     def __init__(self):
-        self.collection_name = os.getenv("QDRANT_COLLECTION_NAME", "codebot_data")
-        self.qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
+        self.collection_name = os.getenv("QDRANT_COLLECTION_NAME", "codebot_bot")
+        self.qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6334")
 
         self.client = QdrantClient(url=self.qdrant_url)
         self.embedding = OpenAIEmbeddings(model="text-embedding-3-small")
@@ -51,7 +52,7 @@ class QdrantVectorService:
 
             points.append(
                 models.PointStruct(
-                    id=str(id.id4()),
+                    id=str(uuid.uuid4()),
                     vector=embedding,
                     payload={
                         "user_id": user_id,
