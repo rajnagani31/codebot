@@ -23,7 +23,7 @@ class GroqLLMService:
 
     def __init__(self, model_name: str ) -> None:
         self.api_key = os.getenv("GROQ_API_KEY")
-        self.model_name = "llama-3.1-8b-instant" if model_name else None
+        self.model_name = "openai/gpt-oss-20b" if model_name else None
 
 
         if self.api_key is None:
@@ -32,6 +32,7 @@ class GroqLLMService:
         self._chat_model = None
 
     def bind_tools(self, tools: list):
+        print(f"Binding tools: {[tool.name for tool in tools]} to model: {self.model_name}")
         model = ChatGroq(
             model = self.model_name,
             streaming=True

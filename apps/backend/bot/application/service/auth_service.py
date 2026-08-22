@@ -428,7 +428,7 @@ class AuthService:
                 client_session_id=client_session_id,
                 user_agent=request.headers.get("User-Agent"),
                 ip_address=request.client.host if request.client else None,
-                message_limit=GUEST_MESSAGE_LIMIT if is_guest else None,
+                message_limit= 10 if is_guest else None, # TODO: make this configurable = GUEST_MESSAGE_LIMIT
             )
             session_id = provisional_session.id
         access_token = self._encode_token(
